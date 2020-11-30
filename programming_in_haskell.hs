@@ -1,5 +1,7 @@
 import Data.Char
 
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+  
 qsort :: Ord a => [a] -> [a]
 qsort [] = []
 qsort (x:xs) = qsort smaller ++ [x] ++ qsort larger
@@ -12,6 +14,7 @@ seqn (act:acts) = do x <- act
                      xs <- seqn acts
                      return (x:xs)
 
+---------------------------------------------------------------------------------------------------------------------------------------------------------
 --1.7 Exercises 
   --3. Write a product function.
     --product' :: Num a => [a] -> a
@@ -115,6 +118,8 @@ luhnDouble x | a > 9     = a-9
 luhn :: Int -> Int -> Int -> Int -> Bool
 luhn a b c d = mod (sum [luhnDouble a, b, luhnDouble c, d]) 10 == 0
 
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+
 factors :: Int -> [Int]
 factors n = [x | x <- [1..n], n `mod` x == 0]
 
@@ -191,6 +196,7 @@ crack xs = encode (-factor) xs
     chitab = [chisqr (rotate n table') table | n<-[0..25]]
     table' = freqs xs
 
+---------------------------------------------------------------------------------------------------------------------------------------------------------
 --5.7 Exercises
 
   --1. Using a list comprehension, give an expression that calculates the sum 1^2 + 2^2 + ... 100^2 of the first one hundred integer squares.
@@ -244,6 +250,8 @@ scalarproduct xs ys = sum [ x * y | (x, y) <- zip xs ys]
   --10. Modify the Caesar cipher program to also handle upper-case letters
   --    Done above. Just had to add conditional expressions and adjust the mapped to range. I also added another 25 entries to the table, which
   --    represent the distribution of upper case characters.
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
 
 --6.8 Exercises
   --1. Counts down forever.
@@ -320,3 +328,25 @@ myMergeSort x = myMerge (myMergeSort first) (myMergeSort second)
   where first  = take l x
         second = drop l x
         l      = quot (length x) 2
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+type Bit = Int
+bin2int :: [Bit] -> Int
+--bin2int bits = sum [w*b | (w,b) <- zip weights bits]
+--  where weights = myIterate (*2) 1
+--        myIterate = \f x -> x:myIterate f (f x)
+
+--We have [dcba]_10 = a + 2b + 4c + 8d = a + 2(b + 2(c + 2(d + 2*0))) (**)
+--which motivates the following simpler implementation:
+bin2int = foldr (\x y -> x + 2*y) 0
+
+--From (**) we also see how we would retrieve [a + 2b + 4c + 8d]_2 = dcba (***):
+int2bin :: Int -> [Bit]
+int2bin 0 = []
+int2bin n = n `mod` 2 : int2bin (n `div` 2) --just stare at this and (***) to convince yourself that it is true. 
+
+--We ensure that our binary numbers are eight bits by the following means:
+make8 :: [Bit] -> [Bit]
+make8 bits = take 8 (bits ++ myRepeat 0)
+  where
+    myRepeat = \x -> x: myRepeat x

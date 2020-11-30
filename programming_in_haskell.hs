@@ -133,27 +133,40 @@ positions x xs = [i | (x', i) <- zip xs [0..], x == x'] --god damn it is beautif
 lowers :: String -> Int
 lowers xs = length [x | x <- xs,  isAsciiLower x]
 
+uppers :: String -> Int
+uppers xs = length [x | x <-xs, isAsciiUpper x]
+
 count :: Char -> String -> Int
 count x xs = length [x' | x' <- xs, x == x']
 --ord and chr come from Data.Prelude
 let2int :: Char -> Int
-let2int c = ord c - ord 'a'
+let2int c | isLower c =  ord c - ord 'a'
+          | isUpper c = ord c - ord 'A' + 26
+          | otherwise = error "Input must be a lower or upper case letter."
+
 int2let :: Int -> Char
-int2let n = chr (ord 'a' + n)
+int2let n | 0<=n  && n<=25  =  chr (ord 'a' + n)
+          | 26<=n && n<=51 =  chr (ord 'A' - 26 + n)
+          | otherwise = error "Number doesn't map back to letters."
+
 shift :: Int -> Char -> Char
-shift n c | isLower c = int2let ((let2int c + n) `mod` 26)
-          | otherwise = c
+shift n c | isLower c || isUpper c = int2let ((let2int c + n) `mod` 52)
+          | otherwise              = c
+
 encode :: Int -> String -> String
 encode n xs = [shift n x | x <- xs]
 
 table :: [Float]
-table = [8.1,1.5,2.8,4.2,12.7,2.2,2.0,6.1,7.0,0.2,0.8,4.0,2.4,6.7,7.5,1.9,0.1,6.0,6.3,9.0,2.8,1.0,2.4,0.2,2.0,0.1]
+table = [8.1,1.5,2.8,4.2,12.7,2.2,2.0,6.1,7.0,0.2,0.8,4.0,2.4,6.7,7.5,1.9,0.1,6.0,6.3,9.0,2.8,1.0,2.4,0.2,2.0,0.1] ++ 
+        [8.1,1.5,2.8,4.2,12.7,2.2,2.0,6.1,7.0,0.2,0.8,4.0,2.4,6.7,7.5,1.9,0.1,6.0,6.3,9.0,2.8,1.0,2.4,0.2,2.0,0.1]
+
+
 
 percent :: Int -> Int -> Float
 percent n m = (fromIntegral n / fromIntegral m) * 100
 freqs :: String -> [Float]
 freqs xs = [percent (count x xs) n | x <- ['a' .. 'z']]
-  where n = lowers xs
+  where n = lowers xs + uppers xs
 
 
 -- Decoding the caeser cypher is possible via a minimization of the chi-square statistic, which is
@@ -197,8 +210,8 @@ mySquare n = [p | p <- grid n n, fst p /= snd p]
   --4. In a similar way to the function length, show how the library function replicate :: Int -> a -> [a] that produces a list of identical elements can be defined
   --   using a list comprehension. For example:
   --   replicate 3 True = [True, True, True]
-myReplicate :: Int -> a -> [a]
-myReplicate n x = [x | k <- [1..n]]
+  --   myReplicate :: Int -> a -> [a]
+  --   myReplicate n x = [x | k <- [1..n]]
 
   --5. A triple (x,y,z) of positive integers is Pythagorean if it satisfies the equation x^2 + y^2 = z^2. Using a list comprehension with three generators,
   --   define a function pyths :: Int -> [(Int, Int, Int)] that returns the list of all such triples whose components are at most a given limit. For example:
@@ -229,3 +242,81 @@ scalarproduct :: [Int] -> [Int] -> Int
 scalarproduct xs ys = sum [ x * y | (x, y) <- zip xs ys]
 
   --10. Modify the Caesar cipher program to also handle upper-case letters
+  --    Done above. Just had to add conditional expressions and adjust the mapped to range. I also added another 25 entries to the table, which
+  --    represent the distribution of upper case characters.
+
+--6.8 Exercises
+  --1. Counts down forever.
+myFac :: Int -> Int
+myFac 0 = 1
+myFac n | n<0       = error "argument to myFac must be non-negative"
+        | otherwise = n * myFac (n-1)
+  --2. Define a recursive function sumdown :: Int -> Int that retuns the sum of the non-negative integers from a given value down to zero.
+    -- For example, sumdown 3 should return the result 3+2+1+0 = 6
+sumdown :: Int -> Int
+sumdown 0 = 0
+sumdown n = n + sumdown (n-1)
+
+  --3. Define the exponentiation operator myExp fo rnon-negative integers using the same pattern of recursion as the multiplication operator *, and show how the expression 2 `myExp` 3 is evaluated using your definition.
+myExp :: Int -> Int -> Int
+myExp _ 0 = 1
+myExp n m = n * myExp n (m-1)
+  --   2 `myExp` 3 = 2 * (2 `myExp` 2) = 2 * (2 * (2 `myExp` 1)) = 2 * (2 * (2 * (2 `myExp` 0))) = 2 * (2 * (2 * 1)) = 2 * (2 * 2) = 2 * 4 = 8 
+  
+  --4. Define a recursive function euclid:: Int -> Int -> Int that implements Euclid's algorithm for calculating the greatest common divisor of two non-negative integers: if the two numbers are equal, this number is the result;
+  --   otherwise, the smaller number is substracted from the larger, and the same process is then repeated. For example:
+  --   euclid 6 27 = 3
+euclid :: Int -> Int -> Int
+euclid m n | m == n        = m                 --this case prevents against ending up with something like euclid m 0 or euclid 0 n, 
+           | min m n  == m = euclid m (n-m)    --because in that case we would have had at the previous step that m==n.
+           | otherwise     = euclid (m-n) n
+  --5. It's clear from Lisp practice, so will not do this one.
+  --6. Without looking at the definitions of the standard prelude, define the following library functions on lists using recursion.
+  --   a. Decide if all logical values in a list are True:
+  --      myAnd :: [Bool] -> Bool
+  --   b. Concatenate a list of lists:
+  --      myConcat :: [[a]] -> [a]
+  --   c. Produce a list with n identical elements:
+  --      myReplicate :: Int -> a -> [a]
+  --   d. Select the nth element of a list:
+  --      myListref :: [a] -> Int -> a
+  --   e. Decide if a value is an element of a list:
+  --      myElem :: Eq a => a -> [a] -> Bool
+myAnd :: [Bool] -> Bool
+myAnd [] = True
+myAnd (x:xs) = x && myAnd xs
+
+myConcat :: [[a]] -> [a]
+myConcat [] = []
+myConcat (x:xs) = x ++ myConcat xs
+
+myReplicate :: Int -> a -> [a]
+myReplicate 0 _ = []
+myReplicate n x = x:(myReplicate (n-1) x)
+
+myListref :: [a] -> Int -> a
+myListref (x:xs) 0 = x
+myListref [] _ = error "index too large!"
+myListref (x:xs) n = myListref xs (n-1)
+
+myElem :: Eq a => a -> [a] -> Bool
+myElem _ [] = False
+myElem x (y:ys) | x == y    = True
+                | otherwise = myElem x ys
+  --7. Define a recursive function merge :: Ord a => [a] -> [a] -> [a] that merges two sorted lists to give a single sorted list. For example:
+  --   merge [2,5,6] [1,3,4] = [1,2,3,4,5,6]
+
+myMerge :: Ord a => [a] -> [a] -> [a]
+myMerge [] ys = ys
+myMerge xs [] = xs
+myMerge (x:xs) (y:ys) | x <= y     = x:myMerge xs (y:ys) 
+                      | otherwise  = y:myMerge (x:xs) ys
+  --8. Using merge, define a function msort :: Ord a => [a] -> [a] that implements merge sort, in which the empty list and singleton lists are already
+  --   sorted, and any other list is sorted by merging together the two lists that result from sorting the two halves of the list separately.
+myMergeSort :: Ord a => [a] -> [a] 
+myMergeSort [] = []
+myMergeSort [x] = [x]
+myMergeSort x = myMerge (myMergeSort first) (myMergeSort second) 
+  where first  = take l x
+        second = drop l x
+        l      = quot (length x) 2

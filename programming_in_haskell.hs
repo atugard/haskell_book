@@ -291,11 +291,11 @@ euclid m n | m == n        = m                 --this case prevents against endi
   --   e. Decide if a value is an element of a list:
   --      myElem :: Eq a => a -> [a] -> Bool
 myAnd :: [Bool] -> Bool
-myAnd [] = True
+myAnd []     = True
 myAnd (x:xs) = x && myAnd xs
 
 myConcat :: [[a]] -> [a]
-myConcat [] = []
+myConcat []     = []
 myConcat (x:xs) = x ++ myConcat xs
 
 myReplicate :: Int -> a -> [a]
@@ -322,17 +322,14 @@ myMerge (x:xs) (y:ys) | x <= y     = x:myMerge xs (y:ys)
   --8. Using merge, define a function msort :: Ord a => [a] -> [a] that implements merge sort, in which the empty list and singleton lists are already
   --   sorted, and any other list is sorted by merging together the two lists that result from sorting the two halves of the list separately.
 myMergeSort :: Ord a => [a] -> [a] 
-myMergeSort [] = []
+myMergeSort []  = []
 myMergeSort [x] = [x]
-myMergeSort x = myMerge (myMergeSort first) (myMergeSort second) 
-  where first  = take l x
-        second = drop l x
-        l      = quot (length x) 2
+myMergeSort x   = myMerge (myMergeSort first) (myMergeSort second) 
+  where first   = take l x
+        second  = drop l x
+        l       = quot (length x) 2
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
---The following is just to get an intuition.
---foldr f z []     = z
---foldr f z (x:xs) = x `f` foldr f z xs
 type Bit = Int
 bin2int :: [Bit] -> Int
 --bin2int bits = sum [w*b | (w,b) <- zip weights bits]
@@ -360,7 +357,7 @@ encodeString = concat . map (make8 . int2bin . ord)
 
 --To decode the strict, we must chop it back into 8 bit binary numbers. To that end we define:
 chop8 :: [Bit] -> [[Bit]]
-chop8 [] = []
+chop8 []   = []
 chop8 bits = take 8 bits : chop8 (drop 8 bits)
 
 --And now we just undo what we did in encodeString:
@@ -403,9 +400,20 @@ myDropWhile p (x:xs) | p x       = myDropWhile p xs
                      | otherwise = x:xs
 
   --3. Redefine the functions map f and filter p using foldr
-
+  
+  --The following is just to get an intuition.
+  --foldr f v []            = z
+  --foldr f v (x:xs)        = x `f` foldr f v xs
+  --foldr f v [a_1,...,a_n] = a_1 `f` (a_2 `f` (...(a_n `f` v)...))
+  
 myMap :: (a -> b) -> [a] -> [b]
 myMap f = foldr (\x y -> (f x): y) [] -- then myMap f [a_1, ..., a_n] = f a_1 : foldr (\x y -> (f x): y) [] [a_2, ..., a_n] = ...
                                       --                              = f a_1 : ... : f a_n : [] = [f a_1, ..., f a_n]
 myFilter :: (a -> Bool) -> [a] -> [a]
 myFilter p = foldr (\x y -> if p x then x:y else y) []
+
+  --4. Using foldl, define a function dec2int :: [Int] -> Int that converts a decimal number into an integer. For example:
+  --   dec2int [2,3,4,5] = 2345
+  --foldl f v []            = v
+  --foldl f v (x:xs)        = foldl f (v `f` x) xs
+  --foldl f v [a_1,...,a_n] = (...((v `f` a_1) `f` a_2)...) `f` a_n

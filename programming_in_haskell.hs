@@ -158,8 +158,8 @@ shift :: Int -> Char -> Char
 shift n c | isLower c || isUpper c = int2let ((let2int c + n) `mod` 52)
           | otherwise              = c
 
-encode :: Int -> String -> String
-encode n xs = [shift n x | x <- xs]
+encodeCaeser :: Int -> String -> String
+encodeCaeser n xs = [shift n x | x <- xs]
 
 table :: [Float]
 table = [8.1,1.5,2.8,4.2,12.7,2.2,2.0,6.1,7.0,0.2,0.8,4.0,2.4,6.7,7.5,1.9,0.1,6.0,6.3,9.0,2.8,1.0,2.4,0.2,2.0,0.1] ++ 
@@ -190,7 +190,7 @@ rotate :: Int -> [a] -> [a]
 rotate n xs = drop n xs ++ take n xs
 
 crack :: String -> String
-crack xs = encode (-factor) xs
+crack xs = encodeCaeser (-factor) xs
   where
     factor = head (positions (minimum chitab) chitab)
     chitab = [chisqr (rotate n table') table | n<-[0..25]]
@@ -330,6 +330,9 @@ myMergeSort x = myMerge (myMergeSort first) (myMergeSort second)
         l      = quot (length x) 2
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
+--The following is just to get an intuition.
+--foldr f z []     = z
+--foldr f z (x:xs) = x `f` foldr f z xs
 type Bit = Int
 bin2int :: [Bit] -> Int
 --bin2int bits = sum [w*b | (w,b) <- zip weights bits]
@@ -350,3 +353,59 @@ make8 :: [Bit] -> [Bit]
 make8 bits = take 8 (bits ++ myRepeat 0)
   where
     myRepeat = \x -> x: myRepeat x
+
+--Encodes string by mapping its chars to a unicode number, then converting each unicode number to an 8bit binary number
+encodeString :: String -> [Bit]
+encodeString = concat . map (make8 . int2bin . ord)
+
+--To decode the strict, we must chop it back into 8 bit binary numbers. To that end we define:
+chop8 :: [Bit] -> [[Bit]]
+chop8 [] = []
+chop8 bits = take 8 bits : chop8 (drop 8 bits)
+
+--And now we just undo what we did in encodeString:
+decodeBits :: [Bit]->String 
+decodeBits = map (chr . bin2int) . chop8
+
+--We model a perfect communication channel using the identity function, and simulate the transmission of a string as a list of bits: 
+transmit :: String -> String
+transmit = decodeBits . channel . encodeString
+
+channel :: [Bit] -> [Bit]
+channel = id 
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+
+--7.9 Exercises
+  --1. Show how the list comprehension [f x | x <- xs, p x] can be re-expressed using the higher-order functions map and filter.
+       -- (map f) . (filter p)  
+  --2. Without looking at the definitions from the standard prelude, define the following higher-order library functions on lists.
+    -- a. Decide if all elements of a list satisfy a predicate:
+    --    all :: (a -> Bool) -> [a] -> Bool
+    -- b. Decide if any element of a list satisfies a predicate:
+    --    any :: (a -> Bool) -> [a] -> Bool
+    -- c. Select elements from a list while they satisfy a predicate:
+    --    takeWhile :: (a -> Bool) -> [a] -> [a]
+    -- d. Remove elements from a list while they satisfy a predicate:
+    --    dropWhile :: (a -> Bool) -> [a] -> [a]
+myAll :: (a -> Bool) -> [a] -> Bool 
+myAll p xs = and (map p xs)
+
+myAny :: (a -> Bool) -> [a] -> Bool 
+myAny p xs= or (map p xs)
+
+myTakeWhile :: (a -> Bool) -> [a] -> [a]
+myTakeWhile p (x:xs) | p x       = x:myTakeWhile p xs 
+                     | otherwise = []
+
+myDropWhile :: (a -> Bool) -> [a] -> [a]
+myDropWhile p (x:xs) | p x       = myDropWhile p xs 
+                     | otherwise = x:xs
+
+  --3. Redefine the functions map f and filter p using foldr
+
+myMap :: (a -> b) -> [a] -> [b]
+myMap f = foldr (\x y -> (f x): y) [] -- then myMap f [a_1, ..., a_n] = f a_1 : foldr (\x y -> (f x): y) [] [a_2, ..., a_n] = ...
+                                      --                              = f a_1 : ... : f a_n : [] = [f a_1, ..., f a_n]
+myFilter :: (a -> Bool) -> [a] -> [a]
+myFilter p = foldr (\x y -> if p x then x:y else y) []

@@ -4,6 +4,43 @@ import Data.Char
 divides :: Int -> Int -> Bool
 divides m n = mod n m == 0 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
+data Nat = Zero | Succ Nat
+nat2int :: Nat -> Int
+nat2int Zero = 0
+nat2int (Succ n) = 1 + nat2int n
+
+int2nat :: Int -> Nat
+int2nat 0 = Zero
+int2nat n = Succ $ int2nat (n-1)
+
+add :: Nat -> Nat -> Nat
+add Zero n = n
+add (Succ m) n = Succ (add m n)
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+data List a = Nil | Cons a (List a)
+lenList :: List a -> Int 
+lenList Nil = 0
+len (Cons _ xs) = 1 + lenList xs 
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+data Tree a = Leaf a | Node (Tree a) a (Tree a)
+
+occursTree :: Eq a => a -> Tree a -> bool 
+occursTree x (Leaf y) = x == y --base case
+occursTree x (Node l y r) = x == y || occursTree x l || occursTree x r
+
+flattenTree :: Tree a -> [a]
+flatten (Leaf x) = [x]
+flatted (Node l x r) = flatten l ++ [x] ++ flatten [r]
+
+--A search tree flattens to a sorted list. From that we know if the value at the node is less than our sought value, it could only be in left subtree, 
+--and vice versa. We get the following:
+
+occursSearchTree :: Ord a => a -> Tree a -> Bool
+occursSearchTree x (Leaf y) = x == y
+occursSearchTree x (Node l y r) | x == y = True
+                                | x < y  = occursSearchTree x l
+                                | x > y  = occursSearchTree x r
+---------------------------------------------------------------------------------------------------------------------------------------------------------
   
 qsort :: Ord a => [a] -> [a]
 qsort [] = []
@@ -480,3 +517,8 @@ altMap _ _ []     = []
 altMap f g (x:xs) = f x : altMap g f xs
 
 luhn xs = 10 `divides` sum (altMap luhnDouble id xs)
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+--8. Declaring types and classes
+
+

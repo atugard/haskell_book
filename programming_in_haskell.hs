@@ -3,6 +3,20 @@ import Data.Char
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 divides :: Int -> Int -> Bool
 divides m n = mod n m == 0 
+
+--rmdups removes duplicates from a list
+rmdups :: Eq a => [a] -> [a]
+rmdups [] = []
+rmdups xs = recursively xs []
+  where 
+    recursively [] res                    = reverse res 
+    recursively (y:ys) res | myElem y res = recursively ys res  
+                           | otherwise    = recursively ys (y:res)
+--This has the benefit that it removes the duplicates in place...
+--An option that might be quicker is to quick sort the list, then just check if two adjacent elements are equal... 
+--but we'd lose the placement of our elements. often in implementations we care about the order, so 
+--this might be better at the cost of time complexity... 
+
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 data Nat = Zero | Succ Nat
 nat2int :: Nat -> Int
@@ -24,13 +38,13 @@ len (Cons _ xs) = 1 + lenList xs
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 data Tree a = Leaf a | Node (Tree a) a (Tree a)
 
-occursTree :: Eq a => a -> Tree a -> bool 
+occursTree :: Eq a => a -> Tree a -> Bool 
 occursTree x (Leaf y) = x == y --base case
 occursTree x (Node l y r) = x == y || occursTree x l || occursTree x r
 
 flattenTree :: Tree a -> [a]
-flatten (Leaf x) = [x]
-flatted (Node l x r) = flatten l ++ [x] ++ flatten [r]
+flattenTree (Leaf x) = [x]
+flattenTree (Node l x r) = flattenTree l ++ [x] ++ flattenTree r
 
 --A search tree flattens to a sorted list. From that we know if the value at the node is less than our sought value, it could only be in left subtree, 
 --and vice versa. We get the following:
@@ -193,7 +207,7 @@ int2let n | 0<=n  && n<=25  =  chr (ord 'a' + n)
           | otherwise = error "Number doesn't map back to letters."
 
 shift :: Int -> Char -> Char
-shift n c | isLower c || isUpper c = int2let ((let2int c + n) `mod` 52)
+shift n c | isAlpha c = int2let ((let2int c + n) `mod` 52)
           | otherwise              = c
 
 encodeCaeser :: Int -> String -> String
@@ -338,7 +352,7 @@ myConcat (x:xs) = x ++ myConcat xs
 
 myReplicate :: Int -> a -> [a]
 myReplicate 0 _ = []
-myReplicate n x = x:(myReplicate (n-1) x)
+myReplicate n x = x: myReplicate (n-1) x
 
 myListref :: [a] -> Int -> a
 myListref (x:xs) 0 = x
@@ -520,5 +534,113 @@ luhn xs = 10 `divides` sum (altMap luhnDouble id xs)
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 --8. Declaring types and classes
+type Assoc k v = [(k,v)]
 
+findTable :: Eq k => k -> Assoc k v -> v
+findTable k t = head [v | (k',v) <- t, k==k']
 
+--8.6 Tautology checker (!!!!!!!!!!!!! lol)-----------------------------------------------------------------------------------------------------------------
+data Prop = Const Bool 
+          | Var Char
+          | Not Prop
+          | And Prop Prop
+          | Imply Prop Prop
+-- Using this data type we can represent p = a => (a and b) as
+-- p :: Prop
+-- p = Imply (Var 'a') (And (Var 'a') (Var 'b'))
+-- To evaluate a Prop we need to know the value of its variables.
+-- The only already defined values we've got are boolean constants...
+-- so we need a procedure to substitute in Const Bool for Var Char...
+-- To that end we define the following table, which associates Char variable names to Bool logical values:
+type Subst = Assoc Char Bool
+
+evalProp :: Subst -> Prop -> Bool
+evalProp _ (Const b) = b
+evalProp s (Var x)   = findTable x s
+evalProp s (Not p)   = not (evalProp s p)
+evalProp s (And p q) = evalProp s p &&  evalProp s q
+evalProp s (Imply p q) = evalProp s p <= evalProp s q
+
+--takes a proposition and gives us its variables.
+vars :: Prop -> [Char]
+vars (Const _) = []
+vars (Var x) = [x]
+vars (Not p) = vars p
+vars (And p q) = vars p ++ vars q
+vars (Imply p q) = vars p ++ vars q
+
+--We note the following regularity:
+----------------------
+--False| False False 
+--False| False True
+--False| True False
+--False| True True
+---------------------
+--True | False False
+--True | False True
+--True | True False
+--True | True True
+---------------------
+--Which gives us the following recursive definition:
+bools :: Int -> [[Bool]]
+bools 0 = [[]]
+bools n = map (False:) bss ++ map (True:) bss
+  where bss = bools (n-1)
+
+--We remove duplicates, and generate all possible values for a proposition.
+substs :: Prop -> [Subst]
+substs p = map (zip _vars) (bools (length _vars))
+  where _vars = rmdups (vars p)
+
+isTautology :: Prop -> Bool
+isTautology p = and [evalProp s p | s <- substs p]
+
+--8.7 Abstract machine--------------------------------------------------------------------------------------------------------------------------------
+
+data Expr = Val Int | Add Expr Expr
+
+--value :: Expr -> Int
+--value (Val n) = n
+--value (Add x y) = value x + value y
+
+--If we follow the evaluation of value we get an order of evaluation of subexpressions determined by Haskell. 
+--To control order of evaluation we implement a control stack Cont of operations Op.
+data Op = EVAL Expr | ADD Int
+type Ctrl = [Op]
+
+--Our evaluator takes an expression and a control stack.
+evalExpr :: Expr -> Ctrl -> Int 
+evalExpr (Val n) c   = exec c n --if the expression is an integer, it is already evaluated, and we begin executing the control stack.
+evalExpr (Add x y) c = evalExpr x (EVAL y : c) --if it is an addition, we evaluate the first argument,
+                                               --placing EVAL y on top of the control stack to indicate
+                                               --that the second argument, y, should be evaluated once 
+                                               --evaluation of the first argument is completed.
+                                                 
+--exec executes the control stack in the context of an integer argument:
+exec :: Ctrl -> Int -> Int
+exec [] n = n
+exec (EVAL y: c) n = evalExpr y (ADD n : c)
+exec (ADD m: c)  n = exec c (m+n)
+
+value :: Expr -> Int
+value e = evalExpr e []
+
+--As an example, (1+2)+3 |-> e = Add (Add (Val 1) (Val 2)) (Val 3)
+-- value e = evalExpr (Add (Add (Val 1) (Val 2)) (Val 3)) []          **
+--         = evalExpr (Add (Val 1) (Val 2)) (EVAL (Val 3) : [])
+--         = evalExpr (Add (Val 1) (Val 2)) [EVAL (Val 3)]            **
+--         = evalExpr (Val 1) (EVAL (Val 2):[EVAL (Val 3)])
+--         = evalExpr (Val 1) [EVAL (Val 2), EVAL (Val 3)]            **
+--         = exec [EVAL (Val 2), EVAL (Val 3)] 1                      **
+--         = evalExpr (Val 2) ADD 1 : [EVAL (Val 3)]
+--         = evalExpr (Val 2) [ADD 1, EVAL (Val 3)]                   **
+--         = exec [ADD 1, EVAL (VAL 3)] 2                             **
+--         = exec [EVAL (VAL 3)] 3                                    **
+--         = evalExpr (VAL 3) ADD 3 : []
+--         = evalExpr (VAL 3) [ADD 3]                                 **
+--         = exec [ADD 3] 3                                           **
+--         = exec [] 3+3
+--         = exec [] 6                                                **
+--         = 6
+
+--A note, this looks a lot like the eval-apply loop from Structure and Interpretation of Computer Programs. Here, exec is playing the role of apply and evalExpr of eval...

@@ -17,6 +17,9 @@ rmdups xs = recursively xs []
 --but we'd lose the placement of our elements. often in implementations we care about the order, so 
 --this might be better at the cost of time complexity... 
 
+--Just to get an idea: 
+--map f (x:xs) = f x : map f xs 
+--filter p xs = [x | x <- xs, p x]
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 data Nat = Zero | Succ Nat
 nat2int :: Nat -> Int
@@ -454,15 +457,15 @@ myDropWhile p (x:xs) | p x       = myDropWhile p xs
   --3. Redefine the functions map f and filter p using foldr
   
   --   The following is just to get an intuition.
-  --   foldr f v []            = z
-  --   foldr f v (x:xs)        = x `f` foldr f v xs
+  --   foldr f v []            = v
+  --   foldr f v (x:xs)        = x `f` foldr f v xs = f x $ foldr f v xs 
   --   foldr f v [a_1,...,a_n] = a_1 `f` (a_2 `f` (...(a_n `f` v)...))
   
 --myMap :: (a -> b) -> [a] -> [b]
 --myMap f = foldr (\x y -> (f x): y) [] -- then myMap f [a_1, ..., a_n] = f a_1 : foldr (\x y -> (f x): y) [] [a_2, ..., a_n] = ...
                                       --                              = f a_1 : ... : f a_n : [] = [f a_1, ..., f a_n]
-myFilter :: (a -> Bool) -> [a] -> [a]
-myFilter p = foldr (\x y -> if p x then x:y else y) []
+exerciseFilter :: (a -> Bool) -> [a] -> [a]
+exerciseFilter p = foldr (\x y -> if p x then x:y else y) []
 
   --4. Using foldl, define a function dec2int :: [Int] -> Int that converts a decimal number into an integer. For example:
   --   dec2int [2,3,4,5] = 2345 = 2*10^3 + 3*10^2 + 4*10^1 + 5*10^0 = 5 + 10(4 + 10(3 + 10(2 + 10*0))) = (((0*10+2)*10 + 3)*10 + 4)*10 + 5,
@@ -495,8 +498,8 @@ unfold p h t x | p x       = []
 chop :: Int -> [Bit] -> [[Bit]]
 chop n = unfold null (take n) (drop n)
 
-myMap :: (a -> b) -> [a] -> [b]
-myMap f = unfold null (f . head) tail
+exerciseMap :: (a -> b) -> [a] -> [b]
+exerciseMap f = unfold null (f . head) tail
 
 --iterate f x = [x, f x, f (f x), f (f (f x)), ...]
 myIterate :: (a -> a) -> a -> [a] 
@@ -616,12 +619,12 @@ type Ctrl = [Opmachine]
 
 --Our evaluator takes an expression and a control stack.
 evalExpr :: Exprmachine -> Ctrl -> Int 
-evalExpr (Valmachine n) c   = exec c n --if the expression is an integer, it is already evaluated, and we begin executing the control stack.
-evalExpr (Addmachine x y) c = evalExpr x (EVAL_ADD y : c) --if it is an addition, we evaluate the first argument,
-                                               --placing EVAL y on top of the control stack to indicate
-                                               --that the second argument, y, should be evaluated once 
-                                               --evaluation of the first argument is completed.
-evalExpr (Multmachine x y) c = evalExpr x (EVAL_MULT y : c)
+evalExpr (Valmachine n) c   = exec c n                        --if the expression is an integer, it is already evaluated, and we begin executing the control stack.
+evalExpr (Addmachine x y) c = evalExpr x (EVAL_ADD y : c)     --if it is an addition, we evaluate the first argument,
+                                                              --placing EVAL_ADD y on top of the control stack to indicate
+                                                              --that the second argument, y, should be evaluated once 
+                                                              --evaluation of the first argument is completed.
+evalExpr (Multmachine x y) c = evalExpr x (EVAL_MULT y : c)   --if it is a multiplication, same deal...
                                                  
 --exec executes the control stack in the context of an integer argument:
 exec :: Ctrl -> Int -> Int
@@ -827,9 +830,70 @@ instance Show Exprgame where
       brak (Valgame n) = show n 
       brak e           = "(" ++ show e ++ ")"
 
-valuesGame :: Expr -> [Int]
+valuesGame :: Exprgame -> [Int]
 valuesGame (Valgame n) = [n]
 valuesGame (Appgame _ l r) = valuesGame l ++ valuesGame r 
 
-evalGame :: Expr -> [Int]
+evalGame :: Exprgame -> [Int]
 evalGame (Valgame n) = [n | n>0]
+evalGame (Appgame o l r) = [apply o x y | x <- evalGame l, y <- evalGame r, valid o x y]
+
+--returns all subsequencies of a list.
+subs :: [a] -> [[a]]
+subs [] = [[]]
+subs (x:xs) = xss ++ map (x:) xss
+  where xss = subs xs
+--I'm having trouble running through the computation mentally, so I will work out an example:  
+--subs [1,2,3] = subs [2,3] ++ map (1:) subs [2, 3]
+--subs [2,3]   = subs [3]   ++ map (2:) subs [3]
+--subs [3]     = subs []    ++ map (3:) subs []
+--subs []      = [[]]
+--subs [3]     = [[]]       ++ map (3:) [[]]
+--             = [[]]       ++ [[3]]
+--             = [[], [3]]
+--subs [2,3]   = [[], [3]]  ++ map (2:) [[], [3]]
+--             = [[],[3]]   ++ [[2], [2,3]]
+--             = [[], [3], [2], [2,3]]
+--subs [1,2,3] = [[], [3], [2], [2,3]] ++ [[1], [1,3], [1,2], [1,2,3]]
+--             = [[], [3], [2], [2,3], [1], [1,3], [1,2], [1,2,3]]
+
+--An easy way to see why this works is to consider any sequence 
+--[a_0, a_1, ..., a_{n-1}]. We can cover all subsequences by grabbing all of the ones that start with a_0, and all of the ones that don't. 
+--                          To get all of the ones that don't, assuming subs works as intended, we simply call subs [a_1, ..., a_{n-1}].
+--                          To get all of the ones that do, we simply take all of the ones that don't and append a_0 to it, i.e. map (a_0:) subs [a_1, ..., a_{n-1}]
+--                          That leaves us with subs [a_0, a_1, ..., a_{n-1}] = subs [a_1, ..., a_{n-1}] ++ maps (a_0:) subs [a_1, ..., a_{n-1}]
+--PROOF OF CORRECTNESS:     Let s be a subsequence. Either s starts with a_0 or it doesn't. If it does, then the subsequence tail s is in subs [a_1, ..., a_{n-1}],
+--                          by definition of subs, and so s is in map (a_0:) subs [a_1,..., a_{n-1}]. If it doesn't, then it's in subs [a_1, ... ,a_ {n-1}].
+
+--returns all possible ways of inserting a new element into a list.
+interleave :: a -> [a] -> [[a]]
+interleave x [] = [[x]]
+interleave x (y:ys) = (x:y:ys) : map (y:) (interleave x ys) -- either you insert it at the beginning or you don't... 
+
+--returns all permutations of a list
+perms :: [a] -> [[a]]
+perms = foldr (concatMap . interleave) [[]]
+--This is the definition suggested by the linter.
+--The easier one is 
+--perms []     = [[]]
+--perms (x:xs) = concatMap (interleave x) (perms xs)
+--Anyway, I will work out an example to get some intuition for what's going on: 
+--perms [1,2,3] = (concatMap . interleave) 1 $ foldr (concatMap . interleave) [[]] [2,3]
+--foldr (concatMap . interleave) [[]] [2,3] = (concatMap . interleave) 2 $ foldr (concatMap . interleave) [[]] [3]
+--foldr (concatMap . interleave) [[]] [3] = (concatMap . interleave) 3 [[]]
+--foldr (concatMap . interleave) [[]] [3] = concat $ (map . interleave) 3 [[]]
+--                                        = concat (map (interleave 3) [[]])
+--                                        = concat ([[[3]]])
+--                                        = [[3]]
+--foldr (concatMap . interleave) [[]] [2,3] = (concatMap . interleave) 2 [[3]]
+--                                          = concat (map (interleave 2) [[3]])
+--                                          = concat ([[[2,3], [3,2]]])
+--                                          = [[2,3], [3,2]]
+--perms [1,2,3] = (concatMap . interleave) 1 [[2,3], [3,2]]
+--              = concat (map (interleave 1) [[2,3], [3,2]])
+--              = concat ([ [[1,2,3], [2,1,3], [2,3,1]], [[1,3,2], [3,1,2], [3,2,1]]])
+--              = [[1,2,3], [2,1,3], [2,3,1], [1,3,2], [3,1,2], [3,2,1]]
+
+--returns all possible ways of selecting zero or more elements in any order from a list:
+choices :: [a] -> [[a]]
+choices = concatMap perms . subs 

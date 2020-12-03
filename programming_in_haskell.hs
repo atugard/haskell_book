@@ -49,11 +49,11 @@ flattenTree (Node l x r) = flattenTree l ++ [x] ++ flattenTree r
 --A search tree flattens to a sorted list. From that we know if the value at the node is less than our sought value, it could only be in left subtree, 
 --and vice versa. We get the following:
 
-occursSearchTree :: Ord a => a -> Tree a -> Bool
-occursSearchTree x (Leaf y) = x == y
-occursSearchTree x (Node l y r) | x == y = True
-                                | x < y  = occursSearchTree x l
-                                | x > y  = occursSearchTree x r
+--occursSearchTree :: Ord a => a -> Tree a -> Bool
+--occursSearchTree x (Leaf y) = x == y
+--occursSearchTree x (Node l y r) | x == y = True
+--                                | x < y  = occursSearchTree x l
+--                                | x > y  = occursSearchTree x r
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
   
 qsort :: Ord a => [a] -> [a]
@@ -146,8 +146,8 @@ a <<||>> b =
   --   formalized in terms of lambda expressions
   --   mult :: Int -> Int -> Int -> Int
   --   mult x y z = x * y * z
-mult :: Int -> Int -> Int -> Int
-mult = \x -> \y -> \z -> x * y * z
+  --mult :: Int -> Int -> Int -> Int
+  --mult = \x -> \y -> \z -> x * y * z
 
   --8. The Luhn algorithm is used to check bank card numbers for simple errors such as mistypign a digit, and proceeds as follows: 
   --   * consider each digit as a separate number;
@@ -544,7 +544,9 @@ data Prop = Const Bool
           | Var Char
           | Not Prop
           | And Prop Prop
+          | Or Prop Prop
           | Imply Prop Prop
+          | Equivalent Prop Prop
 -- Using this data type we can represent p = a => (a and b) as
 -- p :: Prop
 -- p = Imply (Var 'a') (And (Var 'a') (Var 'b'))
@@ -559,15 +561,19 @@ evalProp _ (Const b) = b
 evalProp s (Var x)   = findTable x s
 evalProp s (Not p)   = not (evalProp s p)
 evalProp s (And p q) = evalProp s p &&  evalProp s q
+evalProp s (Or p q)  = evalProp s p || evalProp s q
 evalProp s (Imply p q) = evalProp s p <= evalProp s q
+evalProp s (Equivalent p q) = evalProp s p == evalProp s q
 
 --takes a proposition and gives us its variables.
 vars :: Prop -> [Char]
-vars (Const _) = []
-vars (Var x) = [x]
-vars (Not p) = vars p
-vars (And p q) = vars p ++ vars q
-vars (Imply p q) = vars p ++ vars q
+vars (Const _)        = []
+vars (Var x)          = [x]
+vars (Not p)          = vars p
+vars (And p q)        = vars p ++ vars q
+vars (Or p q)         = vars p ++ vars q
+vars (Imply p q)      = vars p ++ vars q
+vars (Equivalent p q) = vars p ++ vars q
 
 --We note the following regularity:
 ----------------------
@@ -583,8 +589,8 @@ vars (Imply p q) = vars p ++ vars q
 ---------------------
 --Which gives us the following recursive definition:
 bools :: Int -> [[Bool]]
-bools 0 = [[]]
-bools n = map (False:) bss ++ map (True:) bss
+bools 0     = [[]]
+bools n     = map (False:) bss ++ map (True:) bss
   where bss = bools (n-1)
 
 --We remove duplicates, and generate all possible values for a proposition.
@@ -597,7 +603,7 @@ isTautology p = and [evalProp s p | s <- substs p]
 
 --8.7 Abstract machine--------------------------------------------------------------------------------------------------------------------------------
 
-data Expr = Val Int | Add Expr Expr
+data Expr = Val Int | Add Expr Expr | Mult Expr Expr
 
 --value :: Expr -> Int
 --value (Val n) = n
@@ -605,22 +611,25 @@ data Expr = Val Int | Add Expr Expr
 
 --If we follow the evaluation of value we get an order of evaluation of subexpressions determined by Haskell. 
 --To control order of evaluation we implement a control stack Cont of operations Op.
-data Op = EVAL Expr | ADD Int
+data Op = EVAL_ADD Expr | EVAL_MULT Expr | ADD Int | MULT Int
 type Ctrl = [Op]
 
 --Our evaluator takes an expression and a control stack.
 evalExpr :: Expr -> Ctrl -> Int 
 evalExpr (Val n) c   = exec c n --if the expression is an integer, it is already evaluated, and we begin executing the control stack.
-evalExpr (Add x y) c = evalExpr x (EVAL y : c) --if it is an addition, we evaluate the first argument,
+evalExpr (Add x y) c = evalExpr x (EVAL_ADD y : c) --if it is an addition, we evaluate the first argument,
                                                --placing EVAL y on top of the control stack to indicate
                                                --that the second argument, y, should be evaluated once 
                                                --evaluation of the first argument is completed.
+evalExpr (Mult x y) c = evalExpr x (EVAL_MULT y : c)
                                                  
 --exec executes the control stack in the context of an integer argument:
 exec :: Ctrl -> Int -> Int
 exec [] n = n
-exec (EVAL y: c) n = evalExpr y (ADD n : c)
+exec (EVAL_ADD y: c) n = evalExpr y (ADD n : c)
+exec (EVAL_MULT y: c) n = evalExpr y (MULT n : c)
 exec (ADD m: c)  n = exec c (m+n)
+exec (MULT m: c)  n = exec c (m*n)
 
 value :: Expr -> Int
 value e = evalExpr e []
@@ -642,5 +651,145 @@ value e = evalExpr e []
 --         = exec [] 3+3
 --         = exec [] 6                                                **
 --         = 6
-
 --A note, this looks a lot like the eval-apply loop from Structure and Interpretation of Computer Programs. Here, exec is playing the role of apply and evalExpr of eval...
+
+--8.9 Exercises
+  --1. In a similar manner to the function add, define a recursive multiplication function mult :: Nat -> Nat -> Nat for the recursive type of natural numbers:
+  --   Hint: make use of add in your definition.
+
+--m*n= m + m + m + m ... + m (n times), so lets try recursion:
+mult :: Nat -> Nat -> Nat
+mult Zero n = Zero
+mult (Succ m) n = add (mult m n) n 
+
+--This works because always the first position argument is being reduced:
+--mult m n = add (mult (m-1) n) n
+--         = add (add (mult (m-2) n) n) n
+--         = ...
+--         = add (add (...(add (mult Zero n) n) ...) n) n
+--         = add (n (add (... (add Zero n) ...) n)) n
+--         = add (n (add (... (add n n) ...) n) n) n
+--         which translates to m additions of n, or m * n.
+
+  --2. Although not included in appendix B, the standard prelude defines
+  --     data Ordering = LT | EQ | GT
+  --   together with a function
+  --     compare :: Ord a => a -> a -> Ordering 
+  --   that decides if one value in an ordered type is less than (LT), equal to (EQ), or greater than (GT) another value. Using this function, redefine the function
+  --   occursSearchTree :: Ord a => a -> Tree a -> Bool for search trees. Why is this new definition more efficient than the original version?
+occursSearchTree :: Ord a => a -> Tree a -> Bool
+occursSearchTree x (Leaf y) = x == y
+occursSearchTree x (Node l y r) = case compare x y of 
+                                    EQ ->  True
+                                    LT -> occursSearchTree x l
+                                    GT -> occursSearchTree x r
+  --3. Consider the following type of binary trees:
+data Binarytree a = Binaryleaf a | Binarynode (Binarytree a) (Binarytree a)
+  --   Let us say that such a tree is balanced if the number of leaves in the left and right subtree of every node differents by at most one, 
+  --   with leaves themselves being trivially balanced. Define a function balanced :: Binarytree a -> Bool that decides if a binary tree is balanced or not.
+  --   Hint: First define a function that returns the number of leaves in a tree.
+
+numLeaves :: Binarytree a -> Int
+numLeaves (Binaryleaf x) = 1
+numLeaves (Binarynode t1 t2) = numLeaves t1 + numLeaves t2
+
+balanced :: Binarytree a -> Bool
+balanced (Binaryleaf x) = True
+balanced (Binarynode t1 t2) | abs (numLeaves t1 - numLeaves t2) <= 1 = True
+                            | otherwise = False
+  --4. Define a function balance :: [a] -> Binarytree a that converts a non-empty list into a balanced tree. 
+  --   Hint: first define a function that splits a list into two halves whose length differs by at most one.
+balance :: [a] -> Binarytree a
+--This is simple, given the hint. We just recursively split the list into halves that differ by at most one, and use each such half to make a tree.
+--We already have a function that halves a list halve :: [a] -> ([a],[a]), defined above.
+--By assumption, the argument to balance must be a non-empty list... so our base case is the singleton list.
+balance [x] = Binaryleaf x
+balance xs = Binarynode (balance (fst halves)) (balance (snd halves))
+  where halves = halve xs
+  --5. Given the type declaration
+  --     data Expr = Val Int | Add Expr Expr
+  --   define a higher-order-function
+  --     folde :: (Int -> a) -> (a -> a -> a) -> Expr -> a 
+  --   such that folde f g replaces each Val constructor in an expression by the function f,
+  --   and each Add constructor by the function g.
+
+folde :: (Int -> a) -> (a -> a -> a) -> Expr -> a 
+folde f g (Val x) = f x 
+folde f g (Add x y) = g (folde f g x) (folde f g y)
+
+  --6. Using folde, define a function evalEx :: Expr -> Int that evaluates an expression to an integer value, and a function 
+  --   sizeEx :: Expr -> Int that calculates the number of values in an expression.
+
+evalEx :: Expr -> Int
+evalEx = folde id (+)
+
+sizeEx :: Expr -> Int
+sizeEx = folde (const 1) (+)
+
+  --7. Complete the following instance declarations:
+  --     instance Eq a => Eq (Maybe a) where 
+  --       ...
+  --     instance Eq a => Eq [a] where
+  --       ...
+  --Commented them out so that the compiler doesn't complain.
+  -- instance Eq a => Eq (Maybe a) where
+  --    Just x == Nothing = False
+  --    Nothing == Just x = False 
+  --    Just x == Just y  = x == y
+  --instance Eq a => Eq [a] where 
+  --  (x:xs) == (y:ys) = x==y && xs == ys 
+
+  --8. Extend the tautology checker to support the use of logical disjunction (Or) and equivalence (Equiv)
+  --   Done.
+  
+  --9. Extend the abstract machine to support the use of multiplication.
+  --   Done.
+  --   For my own curiosity I have here the code again, and the evaluation of an expression involving mutliplication.
+  --   evalExpr :: Expr -> Ctrl -> Int 
+  --   evalExpr (Val n) c   = exec c n 
+  --   evalExpr (Add x y) c = evalExpr x (EVAL_ADD y : c) 
+  --   evalExpr (Mult x y) c = evalExpr x (EVAL_MULT y : c)
+  --                                                    
+  --   exec :: Ctrl -> Int -> Int
+  --   exec [] n = n
+  --   exec (EVAL_ADD y: c) n = evalExpr y (ADD n : c)
+  --   exec (EVAL_MULT y: c) n = evalExpr y (MULT n : c)
+  --   exec (ADD m: c)  n = exec c (m+n)
+  --   exec (MULT m: c)  n = exec c (m*n)
+  --   value :: Expr -> Int
+  --   value e = evalExpr e []
+  --
+  --   value (Mult (Add (Val 3) (val 3)) (Val 6)) = evalExpr (Mult (Add (Val 3) (Val 3)) (Val 6)) [] 
+  --                                              = evalExpr (Add (Val 3) (Val 3)) [EVAL_MULT Val 6]
+  --                                              = evalExpr (Val 3) [EVAL_ADD Val 3, EVAL_MULT Val 6]
+  --                                              = exec [EVAL_ADD Val 3, EVAL_MULT Val 6] 3
+  --                                              = evalExpr Val 3 [ADD 3, EVAL_MULT Val 6]
+  --                                              = exec [ADD 3, EVAL_MULT Val 6] 3
+  --                                              = exec [EVAL_MULT Val 6] 6 
+  --                                              = evalExpr Val 6 [MULT 6]
+  --                                              = exec [MULT 6] 6 
+  --                                              = exec [] 36
+  --                                              = 36
+  --   Another one
+  --   value (Add (Mult (Val 3) (Val 10)) (Add (Val 6) (Val 5))) 
+  --                                              = evalExpr (Mult (Val 3) (Val 10)) [EVAL_ADD (Add (Val 6) (Val 5))]
+  --                                              = evalExpr (Val 3) [EVAL_MULT (Val 10), EVAL_ADD (Add (Val 6) (Val 5))]
+  --                                              = exec [EVAL_MULT (Val 10), EVAL_ADD (Add (Val 6) (Val 5))] 3 
+  --                                              = evalExpr (Val 10) [MULT 3, EVAL_ADD (Add (Val 6) (Val 5))]
+  --                                              = exec [MULT 3, EVAL_ADD (Add (Val 6) (Val 5))] 10 
+  --                                              = exec [EVAL_ADD (Add (Val 6) (Val 5))] 30 
+  --                                              = evalExpr (Add (Val 6) (Val 5)) [ADD 30]
+  --                                              = evalExpr (Val 6) [EVAL_ADD (Val 5), ADD 30]
+  --                                              = exec [EVAL_ADD (Val 5), ADD 30] 6
+  --                                              = evalExpr (Val 5) [ADD 6, ADD 30]
+  --                                              = exec [ADD 6, ADD 30] 5
+  --                                              = exec [ADD 30] 11
+  --                                              = exec [] 41 
+  --                                              = 41 
+  --
+  --
+  --
+  --
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------

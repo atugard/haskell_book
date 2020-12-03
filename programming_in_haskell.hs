@@ -1,8 +1,9 @@
-import Data.Char
+import           Data.Char
+import           System.IO
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 divides :: Int -> Int -> Bool
-divides m n = mod n m == 0 
+divides m n = mod n m == 0
 
 --rmdups removes duplicates from a list
 rmdups :: Eq a => [a] -> [a]
@@ -984,3 +985,193 @@ isChoice :: Eq a => [a] -> [[a]] -> Bool
 isChoice x y = length (removeFirst x y) /= length y 
 
 --10. Interactive programming--------------------------------------------------------------------------------------------------------------------------------
+
+--do v1 <- a1 
+--   v2 <- a2
+--   .
+--   .
+--   .
+--   vn <- an
+--   return (f v1 v2 ... vn)
+
+--first perform the action a1 store its result as v1, and so on, then return f v1 v2 ... vn as the result of the expression
+--notes: the vi <- ai are called generators.
+--       we can write _ <- ai if the result of the action is not needed.
+
+--eg:
+
+act :: IO (Char, Char)
+act = do x <- getChar
+         getChar
+         y <- getChar
+         return (x,y) -- return in the context behaves as  (Char, Char) -> IO (Char, Char), so it is a natural transformation...
+
+myGetLine :: IO String
+myGetLine = do x <- getChar
+               if x == '\n' then
+                  return []
+               else 
+                  do xs <- myGetLine
+                     return (x:xs)
+
+--myPutStr :: String -> IO ()
+--myPutStr [] = return ()
+--myPutStr (x:xs) = do putChar x
+--                     putStr xs 
+
+myPutStrLn :: String -> IO ()
+myPutStrLn xs = do putStr xs 
+                   putChar '\n'
+
+myStrlen :: IO () 
+myStrlen = do myPutStr "Enter a string: "
+              xs <- myGetLine
+              myPutStr "The string has "
+              myPutStr (show (length xs))
+              myPutStrLn " characters" 
+
+hangman :: IO () 
+hangman = do myPutStrLn "Think of a word: "
+             word <- sgetLine 
+             myPutStrLn "Try to guess it: "
+             playHangman word 
+
+--reads a string of characters from the keyboard and echoes each character as a dash symbol '-' 
+sgetLine :: IO String 
+sgetLine = do x <- getCh
+              if x == '\n' then 
+                 do putChar x 
+                    return []
+              else 
+                 do putChar '-'
+                    xs <- sgetLine
+                    return (x:xs)
+
+--reads a single character from the keyboard without echoing it to the screen.
+--the primitive hSetEcho comes from the library System.IO and it turns input echoing 
+--off prior to reading the characters, and back on again after.
+getCh :: IO Char 
+getCh = do hSetEcho stdin False 
+           x <- getChar
+           hSetEcho stdin True 
+           return x 
+
+--implements main game loop by repeatedly prompting the second player to guess
+--until it equals the secret word:
+playHangman :: String -> IO () 
+playHangman word = do putStr "? "
+                      guess <- myGetLine 
+                      if guess == word then 
+                         putStrLn "You got it!"
+                      else 
+                         do putStrLn (match word guess) 
+                            playHangman word 
+--displays which letters in the word occur anywhere in the guess 
+match :: String -> String -> String 
+match xs ys = [if x `elem` ys then x else '-' | x <- xs]
+
+--Nim is played with a board as follows: 
+--1: * * * * *
+  --2: * * * *
+    --3: * * *
+      --4: * *
+        --5: * 
+
+--Then players take turns removing stars from the board. The winner is the one that removes the last star.
+
+--gives next player 
+next :: Int -> Int 
+next 1 = 2 
+next 2 = 1
+
+type Board = [Int]
+initial :: Board 
+initial = [5,4,3,2,1]
+
+finished :: Board -> Bool
+finished = all (== 0) 
+
+--checks if a move is valid
+validMove :: Board -> Int -> Int -> Bool 
+validMove board row num = board !! (row -1) >= num 
+
+--makes a move
+move :: Board -> Int -> Int -> Board 
+move board row num = [update r n | (r,n) <- zip [1..] board]
+  where update r n = if r == row then n-num else n 
+
+--displays a row to the screen
+putRow :: Int -> Int -> IO ()
+putRow row num = do putStr (show row)
+                    putStr ": "
+                    putStrLn (concat (replicate num "* "))
+
+--putBoard :: Board -> IO ()
+--putBoard [a,b,c,d,e] = do putRow 1 a 
+--                          putRow 2 b
+--                          putRow 3 c 
+--                          putRow 4 d
+--                          putRow 5 e
+--
+getDigit :: String -> IO Int 
+getDigit prompt = do putStr prompt 
+                     x <- getChar
+                     newline
+                     if isDigit x 
+                        then return (digitToInt x)
+                        else do putStrLn "ERROR: Invalid digit"
+                                getDigit prompt
+newline :: IO ()
+newline = putChar '\n'
+
+--board and player number as argument
+playNim :: Board -> Int -> IO ()
+playNim  board player =
+  do newline
+     putBoard board
+     if finished board 
+        then do newline
+                putStr "Player "
+                putStr (show (next player))
+                putStrLn " wins!!"
+        else do newline
+                putStr "Player "
+                print player
+                row <- getDigit "Enter a row number: "
+                num <- getDigit "Stars to remove : "
+                if validMove board row num 
+                   then playNim (move board row num) (next player)
+                   else do newline
+                           putStrLn "ERROR: Invalid move"
+                           playNim board player
+nim :: IO () 
+nim = playNim initial 1 
+
+--10.10 Exercises 
+--  1. Redefine putStr :: String -> IO () using a list comprehension and the library function sequence_ :: [IO a] -> IO () 
+myPutStr :: String -> IO ()
+myPutStr xs = sequence_ [putChar x | x <- xs]
+--  2. Using recursion, define a version of putBoard :: Board -> IO () that displays nim boards of any size, rather than being specific to boards with 
+--     five rows of stars. Hint: first define an auxiliary function that takes the current row number as an additional argument 
+
+makeBoard :: Int -> Board 
+makeBoard n = reverse [1..n]
+
+putBoard :: Board -> IO ()
+--putBoard board = recursively 1 [] 
+--  where helper n board                              = putRow n (board !! (n-1))
+--        recursively i stack | (i-1) == length board = sequence_ stack
+--                            | otherwise             = recursively (i+1) (stack ++ [helper i board])
+
+--Textbook solution was:
+--putBoard = putBoard' 1 
+--putBoard' r [] = return ()
+--putBoard' r (n:ns) = do putRow r n 
+--                        putBoard' (r+1) ns 
+
+--  3. In a similar manner to the first exercise, redefine the generalised version of putBoard using a list comprehension and sequence_ 
+putBoard board = sequence_ [putRow k (board !! (k-1)) | k <- [1..(length board)]]
+
+--  4. Define an action adder :: IO () that reads an given number of integers from the keyboard, one per line, and displays their sum.
+
+

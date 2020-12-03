@@ -808,10 +808,10 @@ instance Show Opgame where
 
 --valid decides if the operator applied to two natural numbers produces another natural number:
 valid :: Opgame -> Int -> Int -> Bool
-valid Addgame _ _ = True
+valid Addgame x y = x <= y --because x+y = y+x... this makes it so that we don't keep both expressions like x+y and y+x when x /= y
 valid Subgame x y = x > y
-valid Mulgame _ _ = True
-valid Divgame x y = x `mod` y == 0 
+valid Mulgame x y = x /= 1 && y /= 1 && x <= y --same reason as above, except now also we remove expressions of the form 1*y or x*1
+valid Divgame x y = x /= 1 && x `mod` y == 0  
 
 --apply performs the valid operation:
 apply :: Opgame -> Int -> Int -> Int
@@ -897,3 +897,90 @@ perms = foldr (concatMap . interleave) [[]]
 --returns all possible ways of selecting zero or more elements in any order from a list:
 choices :: [a] -> [[a]]
 choices = concatMap perms . subs 
+
+solutionGame :: Exprgame -> [Int] -> Int -> Bool
+solutionGame e ns n = elem (valuesGame e) (choices ns) && evalGame e == [n]
+--where n is the solution that we're after
+--what this says is that irrespective of the operations that we've used,
+--if the numbers are one of the possible choices, and the expression evaluates to 
+--n then we've got a solution.
+
+--returns all possible ways of splitting a list into two non-empty lists that append to give the original list.
+split :: [a] -> [([a], [a])]
+split [] = []
+split [_] = []
+split (x:xs) = ([x],xs): [(x:ls,rs) | (ls,rs) <- split xs]
+-- split [1,2,3] = ([1],[2,3]) : [(x:ls,rs) | (ls,rs) <- split [2,3]]
+-- split [2,3] = ([2], [3]) : [(x:ls,rs) | (ls,rs) <- split [3]]
+-- split [3] = [], by definition
+-- split [2,3] = ([2], [3]) : [(x:ls,rs) | (ls,rs) <- []]
+--             = [([2],[3])]
+-- split [1,2,3] = ([1],[2, 3]) : [(1:ls, rs) | (ls,rs) <- [([2],[3])]]
+--               = ([1],[2, 3]) : [([1, 2], [3])]
+--               = [([1],[2,3]), ([1,2], [3])]          
+--PROOF OF CORRECTNESS: First, x:xs = [x] ++ xs. Next, for any (x:ls, rs) we have x:xs = x:(ls ++ rs) = (x:ls) ++ rs.
+--                      Let (ls', rs') be a split of (x:xs). Then ls' = x:ls, and so ... Yeah, split is correct, lul.
+
+--returns all possible expressions whose list of values is precisely a given list:
+exprsGame :: [Int] -> [Exprgame]
+exprsGame [] = []
+exprsGame [n] = [Valgame n]
+exprsGame ns = [e | (ls,rs) <- split ns, l <- exprsGame ls, r <- exprsGame rs, e <- combineExprsgame l r] --powerful syntax, gaht dang.
+
+combineExprsgame :: Exprgame -> Exprgame -> [Exprgame]
+combineExprsgame l r = [Appgame o l r | o <- opsGame]
+
+opsGame :: [Opgame]
+opsGame = [Addgame, Subgame, Mulgame, Divgame]
+
+--exprsGame [1,2] = [e | (ls,rs) <- [([1],[2])], l <- exprsGame ls, r <- exprsGame rs, e <- combineExprsgame l r]
+--                = [e | l <- exprsGame [1], r <- exprsGame [2], e <- combineExprsgame l r]
+--                = [e | e <- combineExprsgame [Val 1] [Val 2]]
+--                = combineExprsgame [Val 1] [Val 2]
+--                = [Appgame o l r | o <- [Addgame, Subgame, Mulgame, Divgame]] 
+--                = [Appgame Addgame (Val 1) (Val 2), Appgame Subgame (Val 1) (Val 2), 
+--
+--exprsGame [1,2,3] = [e | (ls,rs) <- [([1],[2,3]), ([1,2], [3])], l <- exprsGame ls, r <- exprsGame rs, e <- combineExprsgame l r]
+--                  = combineExprsgame exprsGame [1] exprsGame [2,3] ++
+--                  = combineExprsgame exprsGame [1,2] exprsGame [3] ++
+
+--returns all solutions to the game:
+solutionsGame :: [Int] -> Int -> [Exprgame]
+solutionsGame ns n = [e | ns' <- choices ns, e <- exprsGame ns', evalGame e == [n]]
+
+--expression paired with its value.
+type Result = (Exprgame, Int)
+
+resultsGame :: [Int] -> [Result]
+resultsGame [] = []
+resultsGame [n] = [(Valgame n, n) | n>0]
+resultsGame ns = [res | (ls, rs)  <- split ns,
+                          lx  <- resultsGame ls,
+                          ry  <- resultsGame rs,
+                          res <- combineExprsgame' lx ry]
+combineExprsgame' :: Result -> Result -> [Result]
+combineExprsgame' (l,x) (r,y) = [(Appgame o l r, apply o x y) | o <- opsGame, valid o x y]
+
+--As this solution filters out invalid operations, it runs faster.
+solutionsGame' :: [Int] -> Int -> [Exprgame]
+solutionsGame' ns n = [e | ns' <- choices ns, (e,m) <- resultsGame ns', m == n]
+
+--9.11 Exercises
+--  1. Redefine the combinatorial function choices using a list comprehension rather than using composition, concat and map.
+myChoices :: [a] -> [[a]]
+myChoices [x] = [[], [x]]
+myChoices ns = [p | subseq <- subs ns, p <- perms subseq]
+
+--  2. Define a recursive function isChoice :: Eq a => [a] -> [a] -> Bool that decides if one list is chosen from another, without using the combinatorial 
+--     functions perms and subs. Hint: start by defining a function that removes the first occurence of a value from a list.
+--isChoice :: Eq a => [a] -> [a] -> Bool 
+
+removeFirst :: Eq a => a -> [a] -> [a]
+removeFirst x []                 = []
+removeFirst x (y:ys) | x == y    = ys 
+                     | otherwise = y:removeFirst x ys 
+
+isChoice :: Eq a => [a] -> [[a]] -> Bool
+isChoice x y = length (removeFirst x y) /= length y 
+
+--10. Interactive programming--------------------------------------------------------------------------------------------------------------------------------

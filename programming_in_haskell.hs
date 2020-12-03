@@ -603,7 +603,7 @@ isTautology p = and [evalProp s p | s <- substs p]
 
 --8.7 Abstract machine--------------------------------------------------------------------------------------------------------------------------------
 
-data Expr = Val Int | Add Expr Expr | Mult Expr Expr
+data Exprmachine = Valmachine Int | Addmachine Exprmachine Exprmachine | Multmachine Exprmachine Exprmachine
 
 --value :: Expr -> Int
 --value (Val n) = n
@@ -611,17 +611,17 @@ data Expr = Val Int | Add Expr Expr | Mult Expr Expr
 
 --If we follow the evaluation of value we get an order of evaluation of subexpressions determined by Haskell. 
 --To control order of evaluation we implement a control stack Cont of operations Op.
-data Op = EVAL_ADD Expr | EVAL_MULT Expr | ADD Int | MULT Int
-type Ctrl = [Op]
+data Opmachine = EVAL_ADD Exprmachine | EVAL_MULT Exprmachine | ADD Int | MULT Int
+type Ctrl = [Opmachine]
 
 --Our evaluator takes an expression and a control stack.
-evalExpr :: Expr -> Ctrl -> Int 
-evalExpr (Val n) c   = exec c n --if the expression is an integer, it is already evaluated, and we begin executing the control stack.
-evalExpr (Add x y) c = evalExpr x (EVAL_ADD y : c) --if it is an addition, we evaluate the first argument,
+evalExpr :: Exprmachine -> Ctrl -> Int 
+evalExpr (Valmachine n) c   = exec c n --if the expression is an integer, it is already evaluated, and we begin executing the control stack.
+evalExpr (Addmachine x y) c = evalExpr x (EVAL_ADD y : c) --if it is an addition, we evaluate the first argument,
                                                --placing EVAL y on top of the control stack to indicate
                                                --that the second argument, y, should be evaluated once 
                                                --evaluation of the first argument is completed.
-evalExpr (Mult x y) c = evalExpr x (EVAL_MULT y : c)
+evalExpr (Multmachine x y) c = evalExpr x (EVAL_MULT y : c)
                                                  
 --exec executes the control stack in the context of an integer argument:
 exec :: Ctrl -> Int -> Int
@@ -631,8 +631,8 @@ exec (EVAL_MULT y: c) n = evalExpr y (MULT n : c)
 exec (ADD m: c)  n = exec c (m+n)
 exec (MULT m: c)  n = exec c (m*n)
 
-value :: Expr -> Int
-value e = evalExpr e []
+valueMachine :: Exprmachine -> Int
+valueMachine e = evalExpr e []
 
 --As an example, (1+2)+3 |-> e = Add (Add (Val 1) (Val 2)) (Val 3)
 -- value e = evalExpr (Add (Add (Val 1) (Val 2)) (Val 3)) []          **
@@ -713,17 +713,17 @@ balance xs = Binarynode (balance (fst halves)) (balance (snd halves))
   --   such that folde f g replaces each Val constructor in an expression by the function f,
   --   and each Add constructor by the function g.
 
-folde :: (Int -> a) -> (a -> a -> a) -> Expr -> a 
-folde f g (Val x) = f x 
-folde f g (Add x y) = g (folde f g x) (folde f g y)
+folde :: (Int -> a) -> (a -> a -> a) -> Exprmachine -> a 
+folde f g (Valmachine x) = f x 
+folde f g (Addmachine x y) = g (folde f g x) (folde f g y)
 
   --6. Using folde, define a function evalEx :: Expr -> Int that evaluates an expression to an integer value, and a function 
   --   sizeEx :: Expr -> Int that calculates the number of values in an expression.
 
-evalEx :: Expr -> Int
+evalEx :: Exprmachine -> Int
 evalEx = folde id (+)
 
-sizeEx :: Expr -> Int
+sizeEx :: Exprmachine -> Int
 sizeEx = folde (const 1) (+)
 
   --7. Complete the following instance declarations:
@@ -791,5 +791,45 @@ sizeEx = folde (const 1) (+)
   --
   --
 
+--9. The countdown problem--------------------------------------------------------------------------------------------------------------------------------
+-- This is the problem:
+--   Given a sequence of natural numbers and a target natural number, attempt to construct an expression whose value is the target, by combining one or more numbers from the sequence
+--   using addition, subtraction, multplication, division, and parentheses.
+data Opgame = Addgame | Subgame | Mulgame | Divgame
 
----------------------------------------------------------------------------------------------------------------------------------------------------------
+instance Show Opgame where 
+  show Addgame = "+"
+  show Subgame = "-"
+  show Mulgame = "*"
+  show Divgame = "/"
+
+--valid decides if the operator applied to two natural numbers produces another natural number:
+valid :: Opgame -> Int -> Int -> Bool
+valid Addgame _ _ = True
+valid Subgame x y = x > y
+valid Mulgame _ _ = True
+valid Divgame x y = x `mod` y == 0 
+
+--apply performs the valid operation:
+apply :: Opgame -> Int -> Int -> Int
+apply Addgame x y = x + y
+apply Subgame x y = x - y
+apply Mulgame x y = x * y
+apply Divgame x y = x `div` y
+
+--We have a type for valid expressions:
+data Exprgame = Valgame Int | Appgame Opgame Exprgame Exprgame
+
+instance Show Exprgame where
+  show (Valgame n) = show n 
+  show (Appgame o l r) = brak l ++ show o ++ brak r 
+    where 
+      brak (Valgame n) = show n 
+      brak e           = "(" ++ show e ++ ")"
+
+valuesGame :: Expr -> [Int]
+valuesGame (Valgame n) = [n]
+valuesGame (Appgame _ l r) = valuesGame l ++ valuesGame r 
+
+evalGame :: Expr -> [Int]
+evalGame (Valgame n) = [n | n>0]

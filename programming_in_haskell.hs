@@ -1175,4 +1175,44 @@ putBoard board = sequence_ [putRow k (board !! (k-1)) | k <- [1..(length board)]
 --  4. Define an action adder :: IO () that reads an given number of integers from the keyboard, one per line, and displays their sum.
 --     Hint: start by defining an auxiliary function that takes the current total and how many numbers remain to be read as arguments. 
 --           You will also likely need to use the library functions read and show.  
+--adder :: IO () 
+--adder = do putStr "How many numbers? "
+--           n <- myGetLine 
+--           total <- helper 0 (read n :: Int)
+--           putStr "The total is "
+--           putStr (show total)
+--           putChar '\n'
+--helper :: Int -> Int -> IO Int 
+--helper total 0 = return total
+--helper total n = do x <- myGetLine
+--                    helper (total + (read x :: Int)) (n-1)
 
+--  5. Redefine adder using the function sequence :: [IO a] -> IO [a] that performs a list of actions and returns a list of the resulting values.
+--Main problem is making an array of getChars of length user input. Maybe we can use repeat 
+
+adder :: IO ()
+adder = do putStr "How many numbers? "
+           n     <- myGetLine 
+           vals  <- sequence (replicate (read n :: Int) myGetLine) --linter is suggesting Control.Monad.replicateM (read n :: Int) myGetLine, but I'll leave it as required by exercise.
+           total <- putStr "The total is "
+           putStr (show $ sum $ map (\x -> read x :: Int) vals)
+           putChar '\n'
+
+--  6. Using getCh, define an action readLine :: IO String that behaves in the same way as getLine, except that it also permits the delete hey to be used to remove characters.
+--     Hint: the delete character is '\DEL', and the control character for moving the cursor back one space is '\b'
+readLine :: IO String
+readLine = helper []
+  where helper result = do x <- getCh
+                           putChar x 
+                           case x of
+                             '\n' -> 
+                               return (reverse result)
+                             '\DEL' -> 
+                               do putChar '\b'
+                                  putChar ' ';
+                                  putChar '\b';
+                                  if null result 
+                                     then helper result 
+                                     else helper (tail result)  --result is built backwards, which has the benefit of implementing character deletion as a simple tail operation
+                             _ ->  
+                               helper (x:result) 

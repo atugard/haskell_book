@@ -40,15 +40,15 @@ lenList :: List a -> Int
 lenList Nil = 0
 len (Cons _ xs) = 1 + lenList xs 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
-data Tree a = Leaf a | Node (Tree a) a (Tree a)
-
-occursTree :: Eq a => a -> Tree a -> Bool 
-occursTree x (Leaf y) = x == y --base case
-occursTree x (Node l y r) = x == y || occursTree x l || occursTree x r
-
-flattenTree :: Tree a -> [a]
-flattenTree (Leaf x) = [x]
-flattenTree (Node l x r) = flattenTree l ++ [x] ++ flattenTree r
+--data Tree a = Leaf a | Node (Tree a) a (Tree a)
+--
+--occursTree :: Eq a => a -> Tree a -> Bool 
+--occursTree x (Leaf y) = x == y --base case
+--occursTree x (Node l y r) = x == y || occursTree x l || occursTree x r
+--
+--flattenTree :: Tree a -> [a]
+--flattenTree (Leaf x) = [x]
+--flattenTree (Node l x r) = flattenTree l ++ [x] ++ flattenTree r
 
 --A search tree flattens to a sorted list. From that we know if the value at the node is less than our sought value, it could only be in left subtree, 
 --and vice versa. We get the following:
@@ -681,12 +681,12 @@ mult (Succ m) n = add (mult m n) n
   --     compare :: Ord a => a -> a -> Ordering 
   --   that decides if one value in an ordered type is less than (LT), equal to (EQ), or greater than (GT) another value. Using this function, redefine the function
   --   occursSearchTree :: Ord a => a -> Tree a -> Bool for search trees. Why is this new definition more efficient than the original version?
-occursSearchTree :: Ord a => a -> Tree a -> Bool
-occursSearchTree x (Leaf y) = x == y
-occursSearchTree x (Node l y r) = case compare x y of 
-                                    EQ ->  True
-                                    LT -> occursSearchTree x l
-                                    GT -> occursSearchTree x r
+--occursSearchTree :: Ord a => a -> Tree a -> Bool
+--occursSearchTree x (Leaf y) = x == y
+--occursSearchTree x (Node l y r) = case compare x y of 
+--                                    EQ ->  True
+--                                    LT -> occursSearchTree x l
+--                                    GT -> occursSearchTree x r
   --3. Consider the following type of binary trees:
 data Binarytree a = Binaryleaf a | Binarynode (Binarytree a) (Binarytree a)
   --   Let us say that such a tree is balanced if the number of leaves in the left and right subtree of every node differents by at most one, 
@@ -1216,3 +1216,47 @@ readLine = helper []
                                      else helper (tail result)  --result is built backwards, which has the benefit of implementing character deletion as a simple tail operation
                              _ ->  
                                helper (x:result) 
+
+
+--12. Monads and more------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+----------------FUNCTORS ------------------------------------
+--class Functor f where 
+--  fmap :: (a -> b) f a -> f b 
+--instance Functor [] where 
+--  -- fmap :: (a -> b) -> [a] -> [b] 
+--  fmap = map 
+--
+--data Maybe a = Nothing | Just a 
+--instance Functor Maybe where 
+--  -- fmap :: (a -> b) -> Maybe a -> Maybe b 
+--  fmap _ Nothing  = Nothing 
+--  fmap g (Just x) = Just (g x)
+--
+data Tree a = Leaf a | Node (Tree a) (Tree a)
+  deriving Show 
+
+instance Functor Tree where 
+  -- fmap :: (a -> b) -> Tree a -> Tree b 
+  fmap g (Leaf x) = Leaf (g x)
+  fmap g (Node l r) = Node (fmap g l) (fmap g r)
+
+--instance Functor IO where 
+--  -- fmap :: (a -> b) IO a -> IO b 
+--  fmap g mx = do {x <- mx; return (g x)} --linter is saying to instead write  do g <$> mx
+--            --do  x <- mx
+--            --    return (g x)                                
+
+inc :: Functor f => f Int -> f Int 
+inc = fmap (+1)
+-- if f=[] is the list functor, then we have the function that increments each element in a list 
+-- if f=Maybe, then we have the function that maps Nothing to Nothing and increments that which is contained by Just,
+-- if f=Tree, we increment the values of all of the leaves... 
+-- and so on
+
+--Functors must provide an fmap of the specified type, and they must sayisfy the following :
+--fmap id = id 
+--fmap (g . h) = fmap g . fmap h 
+
+
+----------------APPLICATIVES ------------------------------------

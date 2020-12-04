@@ -1173,5 +1173,6 @@ putBoard :: Board -> IO ()
 putBoard board = sequence_ [putRow k (board !! (k-1)) | k <- [1..(length board)]]
 
 --  4. Define an action adder :: IO () that reads an given number of integers from the keyboard, one per line, and displays their sum.
-
+--     Hint: start by defining an auxiliary function that takes the current total and how many numbers remain to be read as arguments. 
+--           You will also likely need to use the library functions read and show.  
 

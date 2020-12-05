@@ -1354,6 +1354,48 @@ inc = fmap (+1)
 --
 --Applicatives must satisfy the following laws:
 --pure id <*> x = x 
+--LHS:
+--id:: a -> a 
+--pure id :: f (a -> a)
+--x:: f a 
+--pure id <*> x :: f a 
+--RHS: f a 
+
 --pure (g x) = pure g <*> pure x 
+--LHS: 
+--g :: a -> b 
+--x :: a 
+--g x :: b 
+--pure (g x) :: f b 
+--RHS:
+--pure g :: f (a -> b) 
+--pure x:: f a 
+--pure g <*> pure x :: f b 
+
 --x <*> pure y = pure (\g-> g y) <*> x 
+--LHS:
+--x :: f(a -> b)
+--pure y :: f a 
+--x <*> pure y ::  f b 
+--RHS:
+--pure (\g-> g y) :: f ((a -> b) -> b)
+--x :: f (a -> b)
+--pure (\g -> g y) <*> x :: f b 
+
 --x <*> (y <*> z) = (pure (.) <*> x <*> y) <*> z
+--LHS: 
+--y :: f (a -> b) 
+--z :: f a 
+--y <*> z :: f b 
+--x :: f  (b -> c) 
+--x <*> (y <*> z) :: f c 
+--RHS: 
+--(.) :: (b -> c) -> (a -> b) -> a -> c 
+--pure (.) :: f ( (b -> c) -> (a -> b) -> a -> c)
+--x :: f (b -> c )
+--pure (.) <*> x :: f ( (a -> b) -> a -> c)
+--y :: f ( a -> b)
+--(pure (.) <*> x) <*> y :: f (a -> c) 
+-- z :: f a 
+--((pure (.) <*> x) <*> y) <*> z :: f c 
+

@@ -1299,5 +1299,61 @@ inc = fmap (+1)
 --For example:
 --pure (\x y z -> x + y + z) <*> Just 1 <*> Just 2 <*> Just 3 = Just 6 
 
-
 --The class of Functors f which support pure and <*> are called applicative functors.
+  
+--class Functor f => Applicative f where 
+--  pure :: a -> f a 
+--  (<*>) :: f (a -> b) -> f a -> f b 
+
+--instance Applicative Maybe where 
+--  -- pure :: a -> Maybe a
+--  pure = Just 
+--  -- (<*>) :: Maybe (a -> b) -> Maybe a -> Maybe b 
+--  Nothing <*> _ = Nothing 
+--  (Just g) <*> mx = fmap g mx 
+
+--instance Applicative [] where 
+--  -- pure a :: a -> [a] 
+--  pure x = [x] 
+--  -- (<*>) :: [a->b] -> [a] -> [b]
+--  gs <*> xs = [g x | g <- gs, x <- xs]
+--
+--We interpret applicatives for lists as a kind of non deterministic programming. For example:
+--pure (*) <*> [1,2] <*> [3,4] = [3, 4, 6, 8], which can represent all the possible ways that the 
+--operation could have happened, i.e. 1 * 3 or 1*4 or 2*3 or 2*4.
+--To illustrate this:
+--prods :: [Int] -> [Int] -> [Int]
+--prods xs ys = [x * y | x <- xs, y <- ys] --this does all possible products where the first argument comes from xs and second from ys.
+
+--We can redefine this as:
+--prods xs ys = pure (*) <*> xs <*> ys  -- apparently (*) <$> xs = pure (*) <*> xs 
+
+--instance Applicative IO where 
+--  --pure :: a -> IO a 
+--  pure = return 
+--  -- (<*>) :: IO (a -> b) -> IO a -> IO b 
+--  mg <*> mx = do { g <- mg; x <- mx; return (g x)} 
+
+--getChars :: Int -> IO String 
+--getChars 0 = return []
+--getChars n = pure (:) <*> getChar <*> getChars (n-1) --could be rewritten as (:) . get Char <$> gerChars (n-1)
+
+
+--Applicative functors can be viewed as abstracting the idea of applying pure functions to effectful arguments, with the precise form 
+--of effects that are permitted depending on the nature of the underlying functor. 
+
+--Applicatives allows us to define generic functions that can be used with any applicative functor. For example :
+--sequenceA :: Applicative f => [f a] -> f [a] 
+--sequenceA [] = pure []
+--sequenceA (x:xs) = pure (:) <*> x <*> sequenceA xs 
+--so sequenceA [Just1, Just 2] = pure (:) <*> Just 1 <*> (pure (:) <*> Just 2 <*> pure [])
+--                             = pure (:) <*> Just 1 <*> (pure (:) <*> Just 2 <*> Just []) 
+--                             = pure (:) <*> Just 1 <*> Just [2] 
+--                             = Just 1:[2]
+--                             = Just [1,2]
+--
+--Applicatives must satisfy the following laws:
+--pure id <*> x = x 
+--pure (g x) = pure g <*> pure x 
+--x <*> pure y = pure (\g-> g y) <*> x 
+--x <*> (y <*> z) = (pure (.) <*> x <*> y) <*> z

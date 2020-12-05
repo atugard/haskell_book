@@ -1260,3 +1260,44 @@ inc = fmap (+1)
 
 
 ----------------APPLICATIVES ------------------------------------
+--Applicatives allow us to generalize the number of arguments that the function fed to fmap takes.
+--Using the idea of currying we can achieve this with the following two basic functions :
+--pure :: a -> f a 
+--(<*>) :: f (a -> b) -> f a -> f b  
+--(<*>) is left associative, so 
+--g <*> x <*> y <*> z = ((g <*> x) <*> y) <*> z 
+--
+--
+--
+--fmap0 :: a -> f a 
+--fmap0 = pure 
+--
+--fmap1 :: (a -> b) -> f a -> f b 
+--fmap1 g x = pure g <*> x 
+--g :: a->b , 
+--pure g :: Applicative f => f ( a -> b)
+--x            :: f a 
+--pure g <*> x :: f b 
+--
+--fmap2 :: (a -> b -> c) -> f a -> f b -> f c 
+--fmap2 g x y = pure g <*> x <*> y  = ((pure g <*> x) <*> y)
+--g                    :: (a -> b -> c), 
+--pure g               :: f (a -> b -> c)
+--pure g <*> x         :: f (b -> c)
+--(pure g <*> x) <*> y :: f c  
+--
+--
+--
+--fmap3 :: (a -> b -> c -> d) -> f a -> f b -> f c -> f d 
+--fmap3 g x y z = pure g <*> x <*> y <*> z  = (((pure g <*> x) <*>  y) <*> z)
+-- g                            :: (a -> b -> c -> d) 
+-- pure g                       :: f (a -> b -> c -> d)
+-- pure g <*> x                 :: f (b -> c -> d)
+-- (pure g <*> x) <*> y         :: f (c -> d)
+-- ((pure g <*> x) <*> y) <*> z :: f d 
+
+--For example:
+--pure (\x y z -> x + y + z) <*> Just 1 <*> Just 2 <*> Just 3 = Just 6 
+
+
+--The class of Functors f which support pure and <*> are called applicative functors.

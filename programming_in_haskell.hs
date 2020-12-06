@@ -1884,10 +1884,6 @@ data Expr_ a = Var_ a | Val_ Int | Add_ (Expr_ a) (Expr_ a)
 --     Functor, Applicative, and Monad classes. With the aid of an example, explain what the 
 --     >>= operator for this type does.
 
-exprVals :: Expr_ a -> [a] 
-exprVals (Var_ x) = [x]
-exprVals (Val_ n) = [] 
-exprVals (Add_ e1 e2) = exprVals e1 ++ exprVals e2 
 
 instance Functor Expr_ where 
   --fmap :: a -> b -> Expr_ a -> Expr_ b 
@@ -1897,11 +1893,16 @@ instance Functor Expr_ where
 
 instance Applicative Expr_ where 
   -- pure :: a -> Expr_ a 
-  pure x = Var_ x 
-  --(<*>) :: Expr_ (a -> b) -> Expr_ a -> Expr_ b 
-  mf <*> mx = fmap (head (exprVals mf)) mx 
+  pure = Var_ 
 
-e = Add_ (Add_ (Var_ 3.4) (Var_ 5.6)) (Var_ 9.9)
+  --(<*>) :: Expr_ (a -> b) -> Expr_ a -> Expr_ b 
+  _ <*> Val_ x = Val_ x
+  Val_ x <*> _ = Val_ x 
+  Var_ f <*> Var_ x = Var_ $ f x 
+  ef <*> Add_ e1 e2 = Add_ (ef <*> e1) (ef <*> e2)
+  Add_ ef eg <*> ex = Add_ (ef <*> ex) (eg <*> ex)
+
+e  = Add_ (Add_ (Var_ 3.4) (Var_ 5.6)) (Var_ 9.9)
 
 instance Monad Expr_ where 
   --(>>=) :: Expr_ a -> (a -> Expr_ b) -> Expr_b 

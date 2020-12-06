@@ -1551,3 +1551,153 @@ app (S st) x = st x
 instance Functor ST where 
   --fmap :: (a -> b) -> ST a -> ST b 
   fmap g st = S (\s -> let (x, s') = app st s in (g x, s'))
+
+--let is like where except it allows variable definitions in expressions, not just function definitions. 
+--we can now make ST into an applicative functor:
+instance Applicative ST where 
+  -- pure :: a -> ST a 
+  pure x = S (\s -> (x,s))
+  -- (<*>) :: ST (a -> b) -> ST a -> ST b 
+  stf <*> stx = S (\s -> 
+    let (f, s')  = app stf s 
+        (x, s'') = app stx s' 
+     in (f x, s''))
+
+instance Monad ST where 
+  -- (>>=) :: ST a -> (a -> ST b) -> ST b
+  st >>= f = S (\s -> let (x, s') = app st s in app (f x) s')
+
+--As an example:
+
+--Above we defined the tree data structure of Data Tree a = Leaf a | Node (Tree a) (Tree a) deriving show 
+--Which was made into a functor too...
+
+tree :: Tree Char 
+tree = Node (Node (Leaf 'a') (Leaf 'b')) (Leaf 'c')
+
+--Now let's change tree's state.
+rlabel :: Tree a -> Int -> (Tree Int, Int)
+rlabel (Leaf _) n = (Leaf n, n+1) 
+rlabel (Node l r) n = (Node l' r', n'')
+  where 
+    (l', n')  = rlabel l n 
+    (r', n'') = rlabel r n'
+
+--We can use ST's applicative structure, though, to rewrite this.
+--Fresh returns the current state integer, and increments it by one :
+fresh :: ST Int 
+fresh = S (\n -> (n, n+1))
+
+--Now:
+
+alabel :: Tree a -> ST (Tree Int) 
+alabel (Leaf _) = Leaf <$> fresh
+alabel (Node l r) = Node <$> alabel l <*> alabel r 
+
+--Leaf <$> fresh = pure Leaf <*> fresh
+--Leaf :: Int -> Tree Int 
+--pure Leaf :: ST (Int -> Tree Int) 
+--fresh :: ST Int 
+--pure Leaf <*> fresh :: ST (Tree Int), as required.
+ 
+--Node <$> alabel l <*> alabel r = pure Node <*> alabel l <*> alabel r 
+--pure Node :: ST(Tree Int -> Tree Int -> Tree Int)
+--alabel l :: ST (Tree Int)
+--alabel r :: ST (Tree Int)
+--pure Node <*> alabel l <*> alabel r  :: ST (Tree Int)
+
+--alabel tree                                    = alabel Node (Node (Leaf 'a') (Leaf 'b')) (Leaf 'c') 
+--                                               = Node <$> alabel (Node (Leaf 'a') (Leaf 'b')) <*> alabel (Leaf 'c')
+
+--alabel (Node (Leaf 'a') (Leaf 'b'))            = Node <$> alabel (Leaf 'a') <*> alabel (Leaf 'b')
+--                                               = Node <$> (Leaf <$> fresh) <*> (Leaf <$> fresh)
+
+--Leaf <$> fresh                                 = (pure Leaf <*> fresh)
+--                                               = S (\s -> 
+--                                                    let (f, s')  = app (pure Leaf) s 
+--                                                        (x, s'') = app fresh s' 
+--                                                     in (f x, s''))
+--                                               = S (\s -> 
+--                                                    let (f, s')  = app (S (\n -> (Leaf, n))) s 
+--                                                        (x, s'') = app (S (\n -> (n, n+1)))  s' 
+--                                                     in (f x, s''))
+--                                               = S (\s -> 
+--                                                    let (f, s')  = (\n -> (Leaf, n)) s  
+--                                                        (x, s'') = (\n -> (n, n+1)) s' 
+--                                                     in (f x, s''))
+--                                               = S (\s -> 
+--                                                    let (f, s')  = (Leaf, s)
+--                                                        (x, s'') = (s', s'+1)
+--                                                     in (f x, s''))
+--                                               = S (\s -> (Leaf s, s+1))
+
+--(Leaf <$> fresh) <*> (Leaf <$> fresh) = S (\s' -> 
+--                                           let (f, s'')  = app (S (\s -> (Leaf s, s+1))) s'
+--                                               (x, s''') = app (S (\s -> (Leaf s, s+1))) s' 
+--This does not work. Writing it into ghci produces a type error, so the evaluation can't be like this. 
+--Oh, yeah this is because of left associativity.
+--We have Node <$> (Leaf <$> fresh) <*> (Leaf <$> fresh) = (Node <$> (Leaf <$> fresh)) <*> (Leaf <$> fresh),
+--not the other way around.
+  
+--(Node <$> (Leaf <$> fresh))                    = pure Node <*> (Leaf <$> fresh)
+--                                               = S (\s ->
+--                                                    let (f, s')  = app (pure Node) s 
+--                                                        (x, s'') = app (S (\t -> (Leaf t, s+1))) s'
+--                                                     in (f x, s'')) 
+--                                               = S (\s ->
+--                                                    let (f, s') = app (pure Node) s              
+--                                                        (x, s'') app (S (\t -> (Leaf t, s+1))) s'     
+--                                                     in (f x, s''))                                    
+
+--app (pure Node) s                              = app (S (\s -> (Node,s))) s 
+--                                               = (Node, s)
+
+--(Node <$> (Leaf <$> fresh))                    = S (\s ->
+--                                                    let (f, s')  = (Node, s)               
+--                                                        (x, s'') = (Leaf s', s'+1)
+--                                                     in (f x, s''))                                    
+--                                               = S (\s -> (Node (Leaf s), s+1))                                    
+
+--Node <$> (Leaf <$> fresh) <*> (Leaf <$> fresh) = S (\s -> (Node (Leaf s), s+1)) <*> S (\s -> (Node (Leaf s), s+1))
+--                                               = S (\s -> 
+--                                                    let (f, s')  = app (S (\t -> (Node (Leaf t), t+1))) s
+--                                                        (x, s'') = app (S (\t -> (Leaf t, t+1))) s'  
+--                                                     in (f x, s'') 
+--                                               = S (\s -> 
+--                                                    let (f, s')  = (Node (Leaf s), s+1)
+--                                                        (x, s'') = (Leaf s', s'+1)
+--                                                     in (f x, s'') 
+--                                               = S (\s -> (Node (Leaf s) (Leaf s+1), s+2))
+
+--alabel (Node (Leaf 'a') (Leaf 'b'))            = S (\s -> (Node (Leaf s) (Leaf s+1), s+2))
+
+--Node <$> alabel (Node (Leaf 'a') (Leaf 'b'))   = pure Node <*> S (\s -> (Node (Leaf s) (Leaf s+1), s+2))
+--                                               = S (\s -> (Node, s)) <*> S (\s -> (Node (Leaf s) (Leaf s+1), s+2))
+--                                               = S (\s -> 
+--                                                    let (f, s')  = app (S (\t -> (Node, t))) s 
+--                                                        (x, s'') = app (S (\t -> (Node (Leaf t) (Leaf t+1), t+2))) s' 
+--                                                     in (f x, s''))
+--                                               = S (\s ->
+--                                                    let (f, s')  = (Node, s)
+--                                                        (x, s'') = (Node (Leaf s') (Leaf s'+1), s'+2)
+--                                                     in (f x, s''))
+--                                               = S (\s -> 
+--                                                    let (f, s')  = (Node, s)
+--                                                        (x, s'') = (Node (Leaf s') (Leaf s'+1), s'+2)
+--                                                     in (Node (Node (Leaf s') (Leaf s'+1)), s'+2))
+--                                               = S (\s -> (Node (Node (Leaf s) (Leaf s+1)), s+2))
+
+--alabel (Leaf 'c')                              = Leaf <$> fresh
+--                                               = S (\s -> (Leaf s, s+1))
+                                               
+--alabel tree                                    = Node <$> alabel (Node (Leaf 'a') (Leaf 'b')) <*> alabel (Leaf 'c')
+--                                               = S (\s -> (Node (Node (Leaf s) (Leaf s+1)), s+2)) <*> S (\s -> (Leaf s, s+1))
+--                                               = S (\s 
+--                                                    let (f, s')  = app (S (\t -> (Node (Node (Leaf t) (Leaf t+1)), t+2))) s 
+--                                                        (x, s'') = app (S (\s -> (Leaf t, t+1))) s' 
+--                                                     in (f x, s'')
+--                                               = S (\s 
+--                                                    let (f, s')  = (Node (Node (Leaf s) (Leaf s+1)), s+2)
+--                                                        (x, s'') = (Leaf s', s'+1)
+--                                                     in (Node (Node (Leaf s) (Leaf s+1)) Leaf s', s'+1)
+--                                               = S (\s -> (Node (Node (Leaf s) (Leaf s+1)) Leaf s+2, s+3))

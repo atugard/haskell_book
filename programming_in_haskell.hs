@@ -1526,3 +1526,28 @@ pairs xs ys = do x <- xs
 --  return x == ...
 --  -- (>>=) :: IO a -> (a -> IO b) -> IO b 
 --  mx >>= f = ... 
+
+--The state monad !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+
+--For simplicity, assume State is of type Int.
+type State = Int 
+
+--We then define a state transformer, which takes an input state and gives an output state.
+--type ST = State -> State 
+
+--In general we want to return a result in addition to updating state. Thus we put: 
+--type ST a = State -> (a, State) 
+
+--Since state is a parametrized type its natural to try to make it into a monad so that we can then use the symple do syntax to write stateful programs...
+--Types declared with the type keyword cannot be made into instances of classes... We redefine ST using the newtype keyword, which requires a dummy constructor 
+--which we call S: 
+newtype ST a = S (State -> (a, State))
+
+--We define a special purpose application function for this type :
+
+app :: ST a -> State -> (a, State) 
+app (S st) x = st x
+
+instance Functor ST where 
+  --fmap :: (a -> b) -> ST a -> ST b 
+  fmap g st = S (\s -> let (x, s') = app st s in (g x, s'))

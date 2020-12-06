@@ -1701,3 +1701,85 @@ alabel (Node l r) = Node <$> alabel l <*> alabel r
 --                                                        (x, s'') = (Leaf s', s'+1)
 --                                                     in (Node (Node (Leaf s) (Leaf s+1)) Leaf s', s'+1)
 --                                               = S (\s -> (Node (Node (Leaf s) (Leaf s+1)) Leaf s+2, s+3))
+
+
+--Since ST is a monad, we can define a procedure that relabels the tree in an even simpler way:
+mlabel :: Tree a -> ST (Tree Int)
+mlabel (Leaf _)   = do n <- fresh 
+                       return (Leaf n) 
+mlabel (Node l r) = do l' <- mlabel l 
+                       r' <- mlabel r 
+                       return (Node l' r')
+--mlabel (Leaf _)                     = do n <- fresh 
+--                                         return (Leaf n) 
+--                                    = fresh >>= \n -> 
+--                                         return (Leaf n) 
+--                                    = S (\s -> let (x, s') = app fresh s in app ((\n -> return (Leaf n)) x) s')
+--                                    = S (\s -> let (x, s') = (s, s+1) in app (return (Leaf x)) s')
+--                                    = S (\s -> let (x, s') = (s, s+1) in app (pure (Leaf x)) s')
+--                                    = S (\s -> let (x, s') = (s, s+1) in app (S (\s -> (Leaf x, s))) s')
+--                                    = S (\s -> let (x, s') = (s, s+1) in (Leaf x, s'))
+--                                    = S (\s ->(Leaf s, s+1))
+--mlabel (Node l r)                   = do l' <- mlabel l 
+--                                         r' <- mlabel r 
+--                                         return (Node l' r')
+--                                    = mlabel l >>= \l' ->
+--                                         mlabel r >>= \r' -> 
+--                                            return (Node l' r')
+
+--If the argument is tree= Node (Node (Leaf 'a') (Leaf 'b')) (Leaf 'c') , then 
+
+--mlabel tree                         = mlabel (Node (Leaf 'a') (Leaf 'b'))  >>= \l' ->
+--                                         mlabel (Leaf 'c') >>= \r' -> 
+--                                            return (Node l' r')
+
+--mlabel tree                         = mlabel (Node (Leaf 'a') (Leaf 'b'))  >>= \l' ->
+--                                         S (\s ->(Leaf s, s+1)) >>= \r' -> 
+--                                         return (Node l' r')
+
+--mlabel (Node (Leaf 'a') (Leaf 'b')) = mlabel (Leaf 'a') >>= \l' ->
+--                                         mlabel (Leaf 'b') >>= \r' ->
+--                                            return (Node l' r')
+--mlabel (Node (Leaf 'a') (Leaf 'b')) = S (\s ->(Leaf s, s+1))>>= \l' ->
+--                                         S (\s ->(Leaf s, s+1)) >>= \r' ->
+--                                            return (Node l' r')
+--S (\s ->(Leaf s, s+1)) >>= \r' -> 
+--   return (Node l' r')              = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in app ((\r' -> return (Node l' r')) x) s')
+--   return (Node l' r')              = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in app (return (Node l' x))  s')
+--   return (Node l' r')              = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in app (S (\t -> ((Node l' x), t)))  s')
+--   return (Node l' r')              = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in ((Node l' x), s')) 
+--   return (Node l' r')              = S (\s -> let (x, s') = (Leaf s, s+1) in ((Node l' x), s')) 
+--   return (Node l' r')              = S (\s -> ((Node l' (Leaf s)), s+1)) 
+
+--mlabel (Node (Leaf 'a') (Leaf 'b')) = S (\s ->(Leaf s, s+1))>>= \l' ->
+--                                         S (\s ->(Leaf s, s+1)) >>= \r' ->
+--                                            return (Node l' r') 
+--                                    = S (\s ->(Leaf s, s+1))>>= \l' ->
+--                                         S (\s -> ((Node l' (Leaf s)), s+1))
+--                                    = S (\s -> let (x,s') = app (S (\t ->(Leaf t, t+1))) s 
+--                                                in app ((\l' -> S (\s -> ((Node l' (Leaf s)), s+1))) x) s')
+--                                    = S (\s -> let (x,s') = (Leaf s, s+1)
+--                                                in app (S (\s -> ((Node x (Leaf s)), s+1))) s')
+--                                    = S (\s -> let (x,s') = (Leaf s, s+1)
+--                                                in ((Node x (Leaf s')), s'+1))
+--                                    = S (\s -> let (x,s') = (Leaf s, s+1)
+--                                                in ((Node (Leaf s) (Leaf s+1)), s+2))
+--                                    = S (\s -> ((Node (Leaf s) (Leaf s+1)), s+2))
+
+--mlabel tree                         = mlabel (Node (Leaf 'a') (Leaf 'b'))  >>= \l' ->
+--                                         mlabel (Leaf 'c') >>= \r' -> 
+--                                            return (Node l' r')
+--                                    = S (\s -> ((Node (Leaf s) (Leaf s+1)), s+2))  >>= \l' ->
+--                                         S (\s ->(Leaf s, s+1)) >>= \r' -> 
+--                                            return (Node l' r')
+--                                    = S (\s -> ((Node (Leaf s) (Leaf s+1)), s+2))  >>= \l' ->
+--                                         S (\s -> ((Node l' (Leaf s)), s+1))
+--                                    = S (\s -> let (x,s') = app (S (\t -> ((Node (Leaf t) (Leaf t+1)), t+2))) s 
+--                                                in app ((\l' -> (S (\t -> ((Node l' (Leaf t)), t+1)))) x)  s')
+--                                    = S (\s -> let (x,s') = app (S (\t -> ((Node (Leaf t) (Leaf t+1)), t+2))) s 
+--                                                in app (S (\t -> ((Node x (Leaf t)), t+1)))  s')
+--                                    = S (\s -> let (x,s') = ((Node (Leaf s) (Leaf s+1)), s+2)
+--                                                in ((Node x (Leaf s')), s'+1)
+--                                    = S (\s -> ((Node (Node (Leaf s) (Leaf s+1)) (Leaf s+2)), s+3))
+
+

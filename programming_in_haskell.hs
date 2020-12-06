@@ -1506,3 +1506,23 @@ pairs :: [a] -> [b] -> [(a,b)]
 pairs xs ys = do x <- xs 
                  y <- ys 
                  return (x,y)
+--Lets figure out what's happening. We know that this definitions of pairs is syntactically equivalent to the following: 
+--pairs xs ys = xs >>= \x -> 
+--  ys >>= \y ->
+--    return (x,y)  
+--Let's figure out what the sub expressions are doing in the context of the Monad []:
+--ys >>= \y -> return (x,y)                  = [z | y <- ys, z <- (\t -> return (x, t)) y] 
+--                                           = [z | y <- ys, z <- (\t -> [(x,t)]) y]
+--                                           = [z | y <- ys, z <- [(x,y)]]
+--                                           = [(x,y) | y <- ys]
+--xs >>= (\x -> (ys >>= \y -> return (x,y))) = [w | x <- xs, w <- (\u -> (ys >>= \y -> return (u,y))) x]
+--                                           = [w | x <- xs, w <- (ys >>= \y -> return (x, y))]
+--                                           = [w | x <- xs, w <- [(x,y) | y <- ys]]
+--                                           = [(x,y) | x<-xs, y<-ys]
+
+--The IO Monad's definitions of return and >>= are built into Haskell directly. We have 
+--instance Monad IO where 
+--  --return :: a -> IO a 
+--  return x == ...
+--  -- (>>=) :: IO a -> (a -> IO b) -> IO b 
+--  mx >>= f = ... 

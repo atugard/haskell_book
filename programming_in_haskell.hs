@@ -1399,3 +1399,110 @@ inc = fmap (+1)
 -- z :: f a 
 --((pure (.) <*> x) <*> y) <*> z :: f c 
 
+--The laws ensure that every well-typed expression that is built using pure and <*> can be rewritten in the following standard form:
+--pure g <*> x1 <*> x2 <*> ... <*> xn  
+
+--Most (all?) applicative functors satisfy 
+--fmap g x = pure g <*> x.
+--Haskell provides g <$> x := fmap g x, which gives the form:
+--g <$> x1 <*> x2 <*> ... <*> xn, 
+--for any function made up of some combination of pure and <*>.
+
+--12.3 Monads ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--Consider the following 
+data Exprr = Val Int | Div Exprr Exprr 
+--evalExprr :: Exprr -> Int
+--evalExprr (Val n) = n 
+--evalExprr (Div n1 n2) = eval n1 `div` eval n2
+--We have evalExprr (Div (Val 1) (Val 0)) = ERROR 
+
+--To address this problem we can use the Maybe monad:
+safediv :: Int -> Int -> Maybe Int 
+safediv _ 0 = Nothing 
+safediv n m = Just (n `div` m) 
+
+--evalExprr :: Exprr -> Maybe Int 
+--evalExprr (Val n) = Just n 
+--evalExprr (Div x y) = case evalExprr x of 
+--                        Nothing -> Nothing 
+--                        Just n -> case evalExprr y of 
+--                                    Nothing -> Nothing 
+--                                    Just m -> safediv n m 
+--This solves our problem of division by zero, but it is verbose. 
+--We know that Maybe is an applicative Functor, which allows us to use the following :
+
+--evalExprr :: Exprr -> Maybe Int
+--evalExprr (Val n) = pure n 
+--evalExprr (Div x y) = pure safediv <*> evalExprr x <*> evalExprr y 
+--pure safediv :: Maybe (Int -> Int -> Maybe Int)
+--evalExprr x :: Maybe Int 
+--evalExprr y :: Maybe Int 
+--so RHS :: Maybe (Maybe Int), which is type incorrect. 
+ 
+--It doesn't work because evalExprr is using safediv, which is not a pure function and may itself fail.
+  
+--To motivate another solution we look at the structure of the second evalExprr definition.
+--It maps nothing to itself, and Just x to some function of x.
+--We can abstract this behavior to the following operator:
+
+--(>>=) :: Maybe a -> (a -> Maybe b) -> Maybe b
+--mx >>= f = case mx of 
+--             Nothing -> Nothing 
+--             Just x  -> f x 
+--This is often called the bind operator. 
+--Using it we define: 
+--evalExprr :: Exprr -> Maybe Int 
+--evalExprr (Val n) = Just n 
+--evalExprr (Div x y) = evalExprr x >>= \n -> 
+--  evalExprr y >>= \m -> 
+--    safediv n m 
+--We evaluate x and call its result value n, y and call its result value m, and then we run safediv n m 
+
+--Generalizing this example, we can the following typical expression built using >>=:
+--m1 >>= \x1 ->  --do m1 :: Monad m => m a1 and call result value x1 :: a1 
+--  m2 >>= \x2 -> --do m2 :: Monad m => m a2 and call result value x2 :: a2 
+--  .
+--  .
+--  .
+--  mn >>= \xn ->  --do mn :: Monad m => m an and call result value xn :: an 
+--    f x1 x2 ... xn -- f:: Monad m => a1 -> a2 -> ... -> an -> m b 
+
+--It turns out that we've already seen this sort of expression! It is equivalent to:
+--do x1 <- m1 
+--   x2 <- m2 
+--   .
+--   .
+--   .
+--   xn <- mn 
+--   f x1 x2 ... xn
+
+--Using this notation we can once more redefine evalExprr:
+
+evalExprr :: Exprr -> Maybe Int 
+evalExprr (Val n) = Just n 
+evalExprr (Div x y) = do n <- evalExprr x 
+                         m <- evalExprr y 
+                         safediv n m 
+
+--The do notation turns out to be more general and not specific to IO and Maybe types, but can be used with any applicative type that forms a monad!
+--Monads are captured by the following built-in declarations:
+--class Applicative m => Monad m where 
+--  return :: a -> m a 
+--  (>>=)  :: m a -> (a -> m b) -> m b
+--  return = pure -- the default definition of return is pure, but this can be overridden 
+
+--instance Monad Maybe where 
+--  -- (>>=) :: Maybe a -> (a -> Maybe b) -> Maybe b
+--  Nothing >>= _ = Nothing 
+--  (Just x) >>= f = f x 
+--
+--instance Monad [] where 
+--  -- (>>=) :: [a] -> (a -> [b]) -> [b] 
+--  xs >>= f = [y | x  <- xs, y <- f x] 
+
+--xs >>= applies the function f to each of the results in the list xs, collecting all of the resulting values in a list. 
+--Using this we can define a function that gets all the pairs from two lists as follows: 
+pairs :: [a] -> [b] -> [(a,b)] 
+pairs xs ys = do x <- xs 
+                 y <- ys 
+                 return (x,y)

@@ -1743,13 +1743,13 @@ mlabel (Node l r) = do l' <- mlabel l
 --mlabel (Node (Leaf 'a') (Leaf 'b')) = S (\s ->(Leaf s, s+1))>>= \l' ->
 --                                         S (\s ->(Leaf s, s+1)) >>= \r' ->
 --                                            return (Node l' r')
---S (\s ->(Leaf s, s+1)) >>= \r' -> 
---   return (Node l' r')              = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in app ((\r' -> return (Node l' r')) x) s')
---   return (Node l' r')              = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in app (return (Node l' x))  s')
---   return (Node l' r')              = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in app (S (\t -> ((Node l' x), t)))  s')
---   return (Node l' r')              = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in ((Node l' x), s')) 
---   return (Node l' r')              = S (\s -> let (x, s') = (Leaf s, s+1) in ((Node l' x), s')) 
---   return (Node l' r')              = S (\s -> ((Node l' (Leaf s)), s+1)) 
+--S (\s ->(Leaf s, s+1)) >>= \r' -> return (Node l' r') 
+--                                    = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in app ((\r' -> return (Node l' r')) x) s')
+--                                    = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in app (return (Node l' x))  s')
+--                                    = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in app (S (\t -> ((Node l' x), t)))  s')
+--                                    = S (\s -> let (x, s') = app (S (\t ->(Leaf t, t+1))) s in ((Node l' x), s')) 
+--                                    = S (\s -> let (x, s') = (Leaf s, s+1) in ((Node l' x), s')) 
+--                                    = S (\s -> ((Node l' (Leaf s)), s+1)) 
 
 --mlabel (Node (Leaf 'a') (Leaf 'b')) = S (\s ->(Leaf s, s+1))>>= \l' ->
 --                                         S (\s ->(Leaf s, s+1)) >>= \r' ->

@@ -40,7 +40,7 @@ lenList :: List a -> Int
 lenList Nil = 0
 len (Cons _ xs) = 1 + lenList xs 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
---data Tree a = Leaf a | Node (Tree a) a (Tree a)
+--data tree a = Leaf a | Node (Tree a) a (Tree a)
 --
 --occursTree :: Eq a => a -> Tree a -> Bool 
 --occursTree x (Leaf y) = x == y --base case
@@ -1233,13 +1233,13 @@ readLine = helper []
 --  fmap _ Nothing  = Nothing 
 --  fmap g (Just x) = Just (g x)
 --
-data Tree a = Leaf a | Node (Tree a) (Tree a)
-  deriving Show 
-
-instance Functor Tree where 
-  -- fmap :: (a -> b) -> Tree a -> Tree b 
-  fmap g (Leaf x) = Leaf (g x)
-  fmap g (Node l r) = Node (fmap g l) (fmap g r)
+--data Tree a = Leaf a | Node (Tree a) (Tree a)
+--  deriving Show 
+--
+--instance Functor Tree where 
+--  -- fmap :: (a -> b) -> Tree a -> Tree b 
+--  fmap g (Leaf x) = Leaf (g x)
+--  fmap g (Node l r) = Node (fmap g l) (fmap g r)
 
 --instance Functor IO where 
 --  -- fmap :: (a -> b) IO a -> IO b 
@@ -1572,16 +1572,16 @@ instance Monad ST where
 --Above we defined the tree data structure of Data Tree a = Leaf a | Node (Tree a) (Tree a) deriving show 
 --Which was made into a functor too...
 
-tree :: Tree Char 
-tree = Node (Node (Leaf 'a') (Leaf 'b')) (Leaf 'c')
+--tree :: Tree Char 
+--tree = Node (Node (Leaf 'a') (Leaf 'b')) (Leaf 'c')
 
 --Now let's change tree's state.
-rlabel :: Tree a -> Int -> (Tree Int, Int)
-rlabel (Leaf _) n = (Leaf n, n+1) 
-rlabel (Node l r) n = (Node l' r', n'')
-  where 
-    (l', n')  = rlabel l n 
-    (r', n'') = rlabel r n'
+--rlabel :: Tree a -> Int -> (Tree Int, Int)
+--rlabel (Leaf _) n = (Leaf n, n+1) 
+--rlabel (Node l r) n = (Node l' r', n'')
+--  where 
+--    (l', n')  = rlabel l n 
+--    (r', n'') = rlabel r n'
 
 --We can use ST's applicative structure, though, to rewrite this.
 --Fresh returns the current state integer, and increments it by one :
@@ -1590,9 +1590,9 @@ fresh = S (\n -> (n, n+1))
 
 --Now:
 
-alabel :: Tree a -> ST (Tree Int) 
-alabel (Leaf _) = Leaf <$> fresh
-alabel (Node l r) = Node <$> alabel l <*> alabel r 
+--alabel :: Tree a -> ST (Tree Int) 
+--alabel (Leaf _) = Leaf <$> fresh
+--alabel (Node l r) = Node <$> alabel l <*> alabel r 
 
 --Leaf <$> fresh = pure Leaf <*> fresh
 --Leaf :: Int -> Tree Int 
@@ -1704,12 +1704,12 @@ alabel (Node l r) = Node <$> alabel l <*> alabel r
 
 
 --Since ST is a monad, we can define a procedure that relabels the tree in an even simpler way:
-mlabel :: Tree a -> ST (Tree Int)
-mlabel (Leaf _)   = do n <- fresh 
-                       return (Leaf n) 
-mlabel (Node l r) = do l' <- mlabel l 
-                       r' <- mlabel r 
-                       return (Node l' r')
+--mlabel :: Tree a -> ST (Tree Int)
+--mlabel (Leaf _)   = do n <- fresh 
+--                       return (Leaf n) 
+--mlabel (Node l r) = do l' <- mlabel l 
+--                       r' <- mlabel r 
+--                       return (Node l' r')
 --mlabel (Leaf _)                     = do n <- fresh 
 --                                         return (Leaf n) 
 --                                    = fresh >>= \n -> 
@@ -1781,5 +1781,150 @@ mlabel (Node l r) = do l' <- mlabel l
 --                                    = S (\s -> let (x,s') = ((Node (Leaf s) (Leaf s+1)), s+2)
 --                                                in ((Node x (Leaf s')), s'+1)
 --                                    = S (\s -> ((Node (Node (Leaf s) (Leaf s+1)) (Leaf s+2)), s+3))
+
+--We can define generic functions that work on all monads... For example the following is provided in Control.Monad:
+
+--mapM :: Monad m => (a -> m b) -> [a] -> m [b] 
+--mapM f [] = return [] 
+--mapM f (x:xs) = do y <- f x
+--                   ys <- mapM f xs 
+--                   return (y:ys)
+
+filterM :: Monad m => (a -> m Bool) -> [a] -> m [a] 
+filterM p [] = return []
+filterM p (x:xs) = do b <- p x 
+                      ys <- filterM p xs 
+                      return (if b then x:ys else ys)
+----instance Monad [] where 
+--  -- (>>=) :: [a] -> (a -> [b]) -> [b] 
+--  xs >>= f = [y | x  <- xs, y <- f x] 
+--filterM (\x -> [True, False]) [1,2,3] = do b  <- (\x -> [True, False]) 1
+--                                           ys <- filterM p [2,3]
+--                                           return (if b then x:ys else ys)
+--                                      = [(if b then 1:ys else ys) | b <- (\x -> [True,False]) 1, ys <- filterM p [2,3]]
+--                                      = [(if b then 1:ys else ys) | b <- [True,False], ys <- filterM p [2,3]]
+--                                      = [(if b then 1:ys else ys) | b <- [True,False], ys <- filterM p [2,3]]
+
+--filterM p [2,3]                       = [(if b then 2:ys else ys) | b <- [True,False], ys <- filterM p [3]]
+
+--filterM p [3]                         = [(if b then 3:ys else ys) | b <- [True,False], ys <- filterM p []]
+--filterM p [3]                         = [(if b then 3:ys else ys) | b <- [True,False], ys <- [[]]]
+--filterM p [3]                         = [[3], []]
+
+--filterM p [2,3]                       = [(if b then 2:ys else ys) | b <- [True,False], ys <- [[3], []]]
+--                                      = [[2,3], [3], [2], []]
+
+--filterM (\x -> [True, False]) [1,2,3] = [(if b then 1:ys else ys) | b <- [True,False], ys <- [[2,3], [3], [2], []]]
+--                                      = [[1,2,3], [1,3], [1,2], [1], [2,3], [3], [2], []]
+
+--We generalize concat :: [[a]] -> [a] on lists to the following :
+
+join :: Monad m => m (m a) -> m a --this is one of the two natural transformations that we use in math to define monads.
+join mmx = do mx <- mmx 
+              x <- mx 
+              return x 
+
+--Monad laws 
+--return x >>= f   = f x
+--mx >>= return    = mx 
+--(mx >>= f) >>= g = mx >>= (\x -> (f x >>= g))
+
+
+--12.5 Exercises 
+--1. Define an instance of the Functor class for the following type of binary trees that have data in their nodes:
+data Tree a = Leaf | Node (Tree a) a (Tree a) 
+  deriving Show 
+instance Functor Tree where 
+  fmap _ Leaf = Leaf 
+  fmap f (Node l v r) = Node (fmap f l) (f v) (fmap f r)
+
+--  2. Complete the following instance declaration to make the partially-applied function type (a ->) into a functor 
+--instance Functor ((->) a) where 
+--  fmap  = (.)
+
+--  3. Define an instance of the Applicative class for the type (a ->). If you are fimiliar with combinatory logic, 
+--   you might recognize pure and <*> for this type as being the well-known K and S combinators. 
+--instance Applicative ((->) a) where 
+--  --pure  :: b -> (a -> b) 
+--  pure f    = const f 
+--  --(<*>) :: ((->) a) (b -> c) -> ((->) a) b -> ((->) a) c = (a -> (b -> c)) -> (a -> b) -> (a -> c)
+--  sf <*> sx = \x -> sf x (sx x)
+
+--  4. There may be more than one way to make a parametrized type into an applicative functor. For example, the library 
+--     Control.Applicative provides an alternative 'zippy' instance for lists, in which the function pure makes an 
+--     infinite list of copies of its argument, and the operator <*> applies each argument function to the 
+--     corresponding argument value at the same position. Complete the following declarations that implement this idea:
+
+newtype ZipList a = Z [a] deriving Show 
+
+instance Functor ZipList where 
+  --fmap :: (a -> b) ZipList a -> Ziplist b 
+  fmap g (Z xs) = Z (fmap g xs)
+
+instance Applicative ZipList where 
+  --pure :: a -> ZipList a 
+  pure x = Z $ repeat x
+
+  -- <*> :: Ziplist (a -> b) -> ZipList a -> ZipList b 
+  (Z gs) <*> (Z xs) = Z [g x | (g,x) <- zip gs xs]
+
+--  5. Work out the types for the variables in the four applicative laws... 
+--  Done.
+
+--  6. Define an instance of the Monad class for the type (a ->)
+
+--instance Monad ((->) a) where 
+--  --(>>=) :: m b -> (b -> m c) -> m c = (a -> b) -> (b -> (a -> c)) -> a -> c
+--  mf >>= mx = \x -> mx (mf x) x 
+
+--  7. Given the following type of expressions 
+data Expr_ a = Var_ a | Val_ Int | Add_ (Expr_ a) (Expr_ a)
+  deriving Show 
+--     that contain variables of some type a, show how to make this type into instances of the 
+--     Functor, Applicative, and Monad classes. With the aid of an example, explain what the 
+--     >>= operator for this type does.
+
+exprVals :: Expr_ a -> [a] 
+exprVals (Var_ x) = [x]
+exprVals (Val_ n) = [] 
+exprVals (Add_ e1 e2) = exprVals e1 ++ exprVals e2 
+
+instance Functor Expr_ where 
+  --fmap :: a -> b -> Expr_ a -> Expr_ b 
+  fmap f (Var_ x) = Var_ $ f x  
+  fmap _ (Val_ n) = Val_ n
+  fmap f (Add_ e1 e2) =  Add_ (fmap f e1) (fmap f e2)
+
+instance Applicative Expr_ where 
+  -- pure :: a -> Expr_ a 
+  pure x = Var_ x 
+  --(<*>) :: Expr_ (a -> b) -> Expr_ a -> Expr_ b 
+  mf <*> mx = fmap (head (exprVals mf)) mx 
+
+e = Add_ (Add_ (Var_ 3.4) (Var_ 5.6)) (Var_ 9.9)
+
+instance Monad Expr_ where 
+  --(>>=) :: Expr_ a -> (a -> Expr_ b) -> Expr_b 
+  (Var_ x) >>= my =  my x 
+  (Val_ n) >>= _  = Val_ n
+  (Add_ e1 e2) >>= my = Add_ (e1 >>= my) (e2 >>= my)
+
+my :: Double -> Expr_ Int 
+my x = Add_ (Var_ (floor x)) (Var_ (ceiling x))
+
+--e >>= my =  Add_ (Add_ (Var_ 3.4) (Var_ 5.6)) (Var_ 9.9) >>= my)
+--         =  Add_ ((Add_ (Var_ 3.4) (Var_ 5.6)) >>= my)
+--                 (Var_ 9.9) >>= my 
+--                 
+--(Var_ 9.9) >>= my  = Add_ (Var_ 9) (Var_ 10)
+--
+--((Add_ (Var_ 3.4) (Var_ 5.6)) >>= my) = Add_ ((Var_ 3.4) >>= my) ((Var_ 5.6) >>= my)
+--                                      = Add_ (Add_ (Val_ 3) (Val_ 4)) (Add_ (Val_ 5) (Val_ 6))
+
+-- e >>= my = Add_ (Add_ (Add_ (Val_ 3) (Val_ 4)) (Add_ (Val_ 5) (Val_ 6))) 
+--                 (Add_ (Var_ 9) (Var_ 10))
+
+-- e >>= my replaces every instance of (Var_ x) in e with (my x)
+
 
 

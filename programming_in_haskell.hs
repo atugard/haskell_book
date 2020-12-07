@@ -1,6 +1,6 @@
 import           Data.Char
+import           Control.Applicative
 import           System.IO
-
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 divides :: Int -> Int -> Bool
 divides m n = mod n m == 0
@@ -544,13 +544,13 @@ findTable :: Eq k => k -> Assoc k v -> v
 findTable k t = head [v | (k',v) <- t, k==k']
 
 --8.6 Tautology checker (!!!!!!!!!!!!! lol)-----------------------------------------------------------------------------------------------------------------
-data Prop = Const Bool 
-          | Var Char
-          | Not Prop
-          | And Prop Prop
-          | Or Prop Prop
-          | Imply Prop Prop
-          | Equivalent Prop Prop
+--data Prop = Const Bool 
+--          | Var Char
+--          | Not Prop
+--          | And Prop Prop
+--          | Or Prop Prop
+--          | Imply Prop Prop
+--          | Equivalent Prop Prop
 -- Using this data type we can represent p = a => (a and b) as
 -- p :: Prop
 -- p = Imply (Var 'a') (And (Var 'a') (Var 'b'))
@@ -558,26 +558,26 @@ data Prop = Const Bool
 -- The only already defined values we've got are boolean constants...
 -- so we need a procedure to substitute in Const Bool for Var Char...
 -- To that end we define the following table, which associates Char variable names to Bool logical values:
-type Subst = Assoc Char Bool
+--type Subst = Assoc Char Bool
 
-evalProp :: Subst -> Prop -> Bool
-evalProp _ (Const b) = b
-evalProp s (Var x)   = findTable x s
-evalProp s (Not p)   = not (evalProp s p)
-evalProp s (And p q) = evalProp s p &&  evalProp s q
-evalProp s (Or p q)  = evalProp s p || evalProp s q
-evalProp s (Imply p q) = evalProp s p <= evalProp s q
-evalProp s (Equivalent p q) = evalProp s p == evalProp s q
+--evalProp :: Subst -> Prop -> Bool
+--evalProp _ (Const b) = b
+--evalProp s (Var x)   = findTable x s
+--evalProp s (Not p)   = not (evalProp s p)
+--evalProp s (And p q) = evalProp s p &&  evalProp s q
+--evalProp s (Or p q)  = evalProp s p || evalProp s q
+--evalProp s (Imply p q) = evalProp s p <= evalProp s q
+--evalProp s (Equivalent p q) = evalProp s p == evalProp s q
 
 --takes a proposition and gives us its variables.
-vars :: Prop -> [Char]
-vars (Const _)        = []
-vars (Var x)          = [x]
-vars (Not p)          = vars p
-vars (And p q)        = vars p ++ vars q
-vars (Or p q)         = vars p ++ vars q
-vars (Imply p q)      = vars p ++ vars q
-vars (Equivalent p q) = vars p ++ vars q
+--vars :: Prop -> [Char]
+--vars (Const _)        = []
+--vars (Var x)          = [x]
+--vars (Not p)          = vars p
+--vars (And p q)        = vars p ++ vars q
+--vars (Or p q)         = vars p ++ vars q
+--vars (Imply p q)      = vars p ++ vars q
+--vars (Equivalent p q) = vars p ++ vars q
 
 --We note the following regularity:
 ----------------------
@@ -592,19 +592,19 @@ vars (Equivalent p q) = vars p ++ vars q
 --True | True True
 ---------------------
 --Which gives us the following recursive definition:
-bools :: Int -> [[Bool]]
-bools 0     = [[]]
-bools n     = map (False:) bss ++ map (True:) bss
-  where bss = bools (n-1)
-
---We remove duplicates, and generate all possible values for a proposition.
-substs :: Prop -> [Subst]
-substs p = map (zip _vars) (bools (length _vars))
-  where _vars = rmdups (vars p)
-
-isTautology :: Prop -> Bool
-isTautology p = and [evalProp s p | s <- substs p]
-
+--bools :: Int -> [[Bool]]
+--bools 0     = [[]]
+--bools n     = map (False:) bss ++ map (True:) bss
+--  where bss = bools (n-1)
+--
+----We remove duplicates, and generate all possible values for a proposition.
+--substs :: Prop -> [Subst]
+--substs p = map (zip _vars) (bools (length _vars))
+--  where _vars = rmdups (vars p)
+--
+--isTautology :: Prop -> Bool
+--isTautology p = and [evalProp s p | s <- substs p]
+--
 --8.7 Abstract machine--------------------------------------------------------------------------------------------------------------------------------
 
 data Exprmachine = Valmachine Int | Addmachine Exprmachine Exprmachine | Multmachine Exprmachine Exprmachine
@@ -1855,18 +1855,18 @@ instance Functor Tree where
 --     infinite list of copies of its argument, and the operator <*> applies each argument function to the 
 --     corresponding argument value at the same position. Complete the following declarations that implement this idea:
 
-newtype ZipList a = Z [a] deriving Show 
-
-instance Functor ZipList where 
-  --fmap :: (a -> b) ZipList a -> Ziplist b 
-  fmap g (Z xs) = Z (fmap g xs)
-
-instance Applicative ZipList where 
-  --pure :: a -> ZipList a 
-  pure x = Z $ repeat x
-
-  -- <*> :: Ziplist (a -> b) -> ZipList a -> ZipList b 
-  (Z gs) <*> (Z xs) = Z [g x | (g,x) <- zip gs xs]
+--newtype ZipList a = Z [a] deriving Show 
+--
+--instance Functor ZipList where 
+--  --fmap :: (a -> b) ZipList a -> Ziplist b 
+--  fmap g (Z xs) = Z (fmap g xs)
+--
+--instance Applicative ZipList where 
+--  --pure :: a -> ZipList a 
+--  pure x = Z $ repeat x
+--
+--  -- <*> :: Ziplist (a -> b) -> ZipList a -> ZipList b 
+--  (Z gs) <*> (Z xs) = Z [g x | (g,x) <- zip gs xs]
 
 --  5. Work out the types for the variables in the four applicative laws... 
 --  Done.
@@ -1943,4 +1943,112 @@ instance Applicative ST where
   stf <*> stx = do f <- stf 
                    x <- stx 
                    return $ f x 
+
+--13 Monadic parsing ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+newtype Parser a = P (String -> [(a, String )])
+
+parse :: Parser a -> String -> [(a, String)]
+parse (P p) = p
+
+item :: Parser Char 
+item = P (\inp -> case inp of 
+                    []     -> [] 
+                    (x:xs) -> [(x, xs)])
+
+--13.4 Sequencing parsers ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+instance Functor Parser where 
+  --fmap :: (a -> b) -> Parser a -> Parser b 
+  fmap f p = P ( \inp -> case parse p inp of 
+                            []         -> []  
+                            [(v, out)] -> [(f v, out)])
+
+instance Applicative Parser where 
+  -- pure :: a -> Parser a 
+  pure v = P (\inp -> [(v,inp)])
+  -- <*> :: Parser (a -> b) -> Parser a -> Parser b 
+  pg <*> px = P (\inp -> case parse pg inp of 
+                            []         -> [] 
+                            [(g, out)] -> parse (fmap g px) out)
+
+threeA :: Parser (Char, Char) 
+threeA = g <$> item <*> item <*> item 
+  where g x y z = (x, z) 
+
+instance Monad Parser where 
+  -- (>>=) :: Parser a -> (a -> Parser b) -> Parser b 
+  p >>= f = P (\inp -> case parse p inp of 
+                         [] -> [] 
+                         [(v, out)] -> parse (f v) out) 
+
+threeM :: Parser (Char, Char)
+threeM = do x <- item 
+            item
+            z <- item 
+            return (x,z) 
+--threeM = item >>= \x -> 
+--            item >>= \_ -> 
+--               item >>= \z ->
+--                  return (x,z)
+
+--item >>= \z -> return (x,z) = P (\inp case parse item inp of 
+--                                        [] -> [] 
+--                                        [(v, out)] -> parse (return (x,v)) out )
+--                            = P (\inp case parse item inp of 
+--                                        [] -> [] 
+--                                        [(v, out)] -> parse P (\inp -> [((x,v), inp)]) out 
+--                            = P (\inp case parse item inp of 
+--                                        [] -> [] 
+--                                        [(v, out)] -> [((x,v), out)])
+
+--(item >>= \_ -> (item >>= \z -> return (x,z))
+--                            = item >>= \_ -> P (\inp case parse item inp of 
+--                                                       []             -> [] 
+--                                                       [(v'', out'')] -> [((x,v''), out'')])
+--                            = P(\inp -> case parse item inp of 
+--                                          []          -> [] 
+--                                          [(v',out')] -> parse ((\_ -> P (\inp case parse item inp of 
+--                                                                                []             -> [] 
+--                                                                                [(v'', out'')] -> [((x,v''), out'')])) v') out'
+--                            = P(\inp -> case parse item inp of 
+--                                          []          -> [] 
+--                                          [(v',out')] -> parse (P (\inp case parse item inp of 
+--                                                                                []             -> [] 
+--                                                                                [(v'', out'')] -> [((x,v''), out'')])) out'
+--                            = P(\inp -> case parse item inp of 
+--                                          [] -> [] 
+--                                          [(v',out')] -> case parse item out' of 
+--                                                           [] -> [] 
+--                                                           [(v'', out'')] -> [((x,v''), out'')])
+--threeM = item >>= \x -> item >>= \_ -> item >>= \z -> return (x,z)
+--                            = item >>= \x -> P(\inp -> case parse item inp of 
+--                                                         []          -> [] 
+--                                                         [(v',out')] -> case parse item out' of 
+--                                                                          []             -> [] 
+--                                                                          [(v'', out'')] -> [((x,v''), out'')])
+--                            = P (\inp -> case parse item inp of
+--                                           []         -> [] 
+--                                           [(v, out)] -> parse ((\x -> P(\inp -> case parse item inp of 
+--                                                                                   []          -> [] 
+--                                                                                   [(v',out')] -> case parse item out' of 
+--                                                                                                    []             -> [] 
+--                                                                                                    [(v'', out'')] -> [((x,v''), out'')])) v) out 
+--                            = P (\inp -> case parse item inp of
+--                                           []         -> [] 
+--                                           [(v, out)] -> parse P(\inp -> case parse item inp of 
+--                                                                           []          -> [] 
+--                                                                           [(v',out')] -> case parse item out' of 
+--                                                                                            []             -> [] 
+--                                                                                            [(v'', out'')] -> [((v,v''), out'')])  out 
+--                            = P (\inp -> case parse item inp of
+--                                           []         -> [] 
+--                                           [(v, out)] -> case parse item out of 
+--                                                           []          -> [] 
+--                                                           [(v',out')] -> case parse item out' of
+--                                                                            []             -> [] 
+--                                                                            [(v'', out'')] -> [((v,v''), out'')])  
+--
+--Do statements just propagate forward the action similar to what pipes do on the command line, it seems. 
+
 

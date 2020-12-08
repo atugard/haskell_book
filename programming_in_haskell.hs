@@ -2051,4 +2051,177 @@ threeM = do x <- item
 --
 --Do statements just propagate forward the action similar to what pipes do on the command line, it seems. 
 
+--The following implements the idea of trying multiple parsers on the same input string. The first that succeeds is returned. Failure is returned if all fail. 
+
+--class Applicative f => Alternative f where 
+--  empty :: f a 
+--  (<|>) :: f a -> f a -> f a 
+
+--These are required to satisfy the following: 
+--empty <|> x = x                   IN OTHER WORDS e * x = x 
+--x <|> empty = x                   IN OTHER WORDS x * e = x
+--x <|> (y <|> z) = (x <|> y) <|> z IN OTHER WORDS x * (y * z) = (x * y) * z 
+--                                  THUS           This is a monoid.
+
+--instance Alternative Maybe where 
+--  --empty :: Maybe a 
+--  empty = Nothing 
+--  --(<|>) :: Maybe a -> Maybe a -> Maybe a 
+--  Nothing <|> my = my
+--  Just x <|> _ = Just x
+
+instance Alternative Parser where 
+  --empty :: Parser a 
+  empty = P (const [])
+  p <|> q = P ( \inp -> case parse p inp of
+                          [] -> parse q inp
+                          [(v,out)] -> [(v,out)])
+
+--Control.Monad provides a similar class MonadPlus with operators mzero and mplus. 
+
+--13.6 Derived primitives ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 
+--We use empty, return v, and item as our three primitive parsers and derive others from them.
+
+sat :: (Char -> Bool) -> Parser Char 
+sat p = do x <- item 
+           if p x then return x else empty 
+--    = item >> \x -> 
+--        if p x then return x else empty 
+--    = item >>= \x -> 
+--        if p x then P (\inp -> [(x, inp)]) else P (const [])
+--    = P (\inp -> case parse item inp of
+--                   [] -> [] 
+--                   [(v,out)] -> parse ((\x -> if p x then P (\inp -> [(x, inp)]) else P (const [])) v) out )
+--    = P (\inp -> case parse item inp of
+--                   [] -> [] 
+--                   [(v,out)] -> parse (if p v then P (\inp -> [(v, inp)]) else P (const [])) out)
+--    = P (\inp -> case parse item inp of
+--                   [] -> [] 
+--                   [(v,out)] -> parse (if p v then P (\inp -> [(v, inp)]) else P (const [])) out)
+
+
+--These are clear, just substitute in the predicates...
+digit :: Parser Char 
+digit = sat isDigit 
+
+lower :: Parser Char 
+lower = sat isLower 
+
+upper :: Parser Char 
+upper = sat isUpper  
+
+letter :: Parser Char 
+letter = sat isAlpha 
+
+alphanum :: Parser Char 
+alphanum = sat isAlphaNum
+
+char :: Char -> Parser Char 
+char x = sat (== x)
+
+string :: String -> Parser String 
+string []     = return [] 
+--            = P (\inp -> ([], inp))
+string (x:xs) = do char x 
+                   string xs 
+                   return (x:xs) 
+--            = char x >>= \_ ->
+--                string xs >>= \_ ->
+--                  return (x:xs) 
+
+--string "Hi"     = char 'H' >>= \_ -> 
+--                    string "i" >>= \_ ->
+--                      return "Hi"
+--                = P (\inp -> case (parse (char 'H') inp) of 
+--                               [] -> [] 
+--                               [(v,out)] -> parse ((\_ -> string "i" >>= \_ -> return "Hi") v) out 
+--                = P (\inp -> case (parse (char 'H') inp) of 
+--                               [] -> [] 
+--                               [(v,out)] -> parse (string "i" >>= \_ -> return "Hi") out 
+
+--string "i"      = do char 'i'
+--                     string ""
+--                     return "i"
+--string "i"      = do char 'i'
+--                     P (\inp -> ([], inp))
+--                     return "i"
+--string "i"      = char 'i' >>=  \_ ->
+--                    P (\inp -> ([], inp)) >>= -> 
+--                      return "i"
+--                = P (\inp -> case parse (char 'i') inp of 
+--                               [] -> [] 
+--                               [(v,out)] -> parse (P (\inp -> ([], inp)) >>= \_ -> return "i")  out)
+
+--P (\inp -> ([], inp)) >>= \_ -> return "i"              
+--                = P ( \inp -> case parse (P (\inp' -> ([],inp'))) inp of 
+--                                [] -> []
+--                                [(v,out)] -> parse (return "i") out 
+--                = P ( \inp -> case ([],inp) 
+--                                [] -> []
+--                                [(v,out)] -> parse (return "i") out 
+--                = P ( \inp -> parse (return "i") inp)
+--                = P ( \inp -> parse (P (\inp' -> ("i", inp'))) inp)
+--                = P ( \inp -> ("i", inp))
+--string "i"      = char 'i' >>=  \_ ->
+--                    P ( \inp -> ("i", inp))
+--                = P (\inp' -> case parse (char 'i') inp' of 
+--                                [] -> [] 
+--                                [(v', out')] -> parse P ( \inp -> ("i", inp)) out' 
+----              = P (\inp' -> case parse (char 'i') inp' of 
+--                                [] -> [] 
+--                                [(v', out')] -> ("i", out'))
+--string "i" >>= \_ -> return "Hi"
+--                = P (\inp'' -> case parse (P (\inp' -> case parse (char 'i') inp' of 
+--                                                         [] -> [] 
+--                                                         [(v', out')] -> ("i", out'))) inp''
+--                                 [] -> [] 
+--                                 [(v'', out'')] -> parse (return "Hi") out'' )
+--                = P (\inp'' -> case parse (P (\inp' -> case parse (char 'i') inp' of 
+--                                                         [] -> [] 
+--                                                         [(v', out')] -> ("i", out'))) inp''
+--                                 [] -> [] 
+--                                 [(v'', out'')] -> parse (P (\inp''' -> ("Hi", inp''')))  out'' )
+--                = P (\inp'' -> case parse (P (\inp' -> case parse (char 'i') inp' of 
+--                                                         [] -> [] 
+--                                                         [(v', out')] -> [("i", out')])) inp''
+--                                 [] -> [] 
+--                                 [(v'', out'')] -> [("Hi", out'')])
+--                = P (\inp'' -> case 
+--                                 case parse (char 'i') inp'' of 
+--                                   [] -> [] 
+--                                   [(v', out')] -> [("i", out')]
+--                                 [] -> [] 
+--                                 [(v'', out'')] -> [("Hi", out'')])
+--                = P (\inp'' -> case parse (char 'i') inp''
+--                                 [] -> [] 
+--                                 [(v'', out'')] -> [("Hi", out'')])
+
+--string "Hi"     = P (\inp -> case (parse (char 'H') inp) of 
+--                               [] -> [] 
+--                               [(v,out)] -> parse (P (\inp'' -> case parse (char 'i') inp''
+--                                                                  [] -> [] 
+--                                                                  [(v'', out'')] -> [("Hi", out'')])) out 
+--                = P (\inp -> case (parse (char 'H') inp) of 
+--                               [] -> [] 
+--                               [(v,out)] -> case parse (char 'i') out
+--                                                 [] -> [] 
+--                                                 [(v'', out'')] -> [("Hi", out'')])) out 
+--                = P (\inp -> case (parse (char 'H') inp) of 
+--                               [] -> [] 
+--                               [(v,out)] -> case parse (char 'i') out
+--                                                 [] -> [] 
+--                                                 [(v', out')] -> [("Hi", out')])
+
+--So in general for a string "c1c2...cn" we have 
+
+--string "c1c2...cn" = P (\inp -> case (parse (char 'c1') inp) of 
+--                                  [] -> [] 
+--                                  [(v1,out1)] -> case parse (char 'c2') out
+--                                                 [] -> [] 
+--                                                 [(v2, out2)] -> ... -> case parse (char 'cn') out 
+--                                                                             [] -> [] 
+--                                                                             [(vn, outn)] -> [("c1c2...cn", outn)]),
+--                   where  inp = "c1c2...cn" ++ outn 
+
 

@@ -1,5 +1,6 @@
 import           Data.Char
 import           Control.Applicative
+import           Data.Monoid
 import           System.IO
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 divides :: Int -> Int -> Bool
@@ -689,6 +690,7 @@ mult (Succ m) n = add (mult m n) n
 --                                    GT -> occursSearchTree x r
   --3. Consider the following type of binary trees:
 data Binarytree a = Binaryleaf a | Binarynode (Binarytree a) (Binarytree a)
+  deriving Show 
   --   Let us say that such a tree is balanced if the number of leaves in the left and right subtree of every node differents by at most one, 
   --   with leaves themselves being trivially balanced. Define a function balanced :: Binarytree a -> Bool that decides if a binary tree is balanced or not.
   --   Hint: First define a function that returns the number of leaves in a tree.
@@ -2275,7 +2277,7 @@ natural :: Parser Int
 natural = token nat 
 
 integer :: Parser Int 
-integer = token nat 
+integer = token int 
 
 symbol :: String -> Parser String 
 symbol xs = token (string xs)
@@ -2410,3 +2412,255 @@ runCalculator :: IO ()
 runCalculator = do cls  --clear the screen
                    showbox  --display the box 
                    clear  --start with an empty display 
+
+--13.11 Exercises 
+
+--1. Define a parser comment :: Parser () for ordinary Haskell comments that begin with the symbol -- and extend to the end of the current line, which is represented 
+--   by the control character '\n'
+comment :: Parser () 
+comment = do symbol "--"
+             many $ sat (/= '\n')             
+             space 
+             return () 
+
+--2. Using our second grammar for arithmetic expressions, draw the two possible parse trees for the expression 2+3+4
+--The grammar is:
+--expr   ::= expr + expr | term 
+--term   ::= term * term | factor 
+--factor ::= ( expr ) | nat 
+--nat    ::= 0 | 1 | 2 | ... 
+--In this grammar we have the following trees 
+--         (2+3)+4            2+(3,4)
+--           expr              expr 
+--         /  |  \           /  |  \
+--      expr    term      term  + expr 
+--    /  |  \     |        |    /  |  \
+--  fac  + fac   fac      fac fac  +  fac 
+--   |       |    |        |   |       | 
+--  nat     nat  nat      nat nat     nat 
+--   |       |    |        |   |       |
+--   2       3    4        2   3       4 
+
+--3. Using our third grammar for arithmetic expressions, draw the parse trees for the expressions 2+3, 2*3*4 and (2+3)+4 
+--The grammar is:
+--expr ::= term + expr | term 
+--term ::= factor * term | factor 
+--factor ::= ( expr ) | nat 
+--nat    ::= 0 | 1 | 2 | ... 
+  
+--      2+3               2*3*4                         (2+3)+4 
+--      expr              expr                            expr 
+--    /  |  \              |                            /  |  \ 
+--  nat  +  nat           term                       fac   +  expr 
+--   |       |           /  |  \                   /  |  \      |
+--   2       3         fac  *  term               (  expr  )   term 
+--                      |     /  |  \              /  |  \      |
+--                     nat  fac  * term         term  +  expr  fac 
+--                      |    |       |           |        |     |
+--                      2   nat     fac         fac      term  nat 
+--                           |       |           |        |     |
+--                           3      nat         nat      fac    3
+--                                   |           |        |       
+--                                   4           2       nat 
+--                                                        |
+--                                                        3 
+--4. Explain why the final simplification of the grammar for arithmetic expressions has a dramatic effect on the efficiency of the resulting parser.
+--   Hint: begin by considering how an expression comprising a single number would be parsed if this simplification step had not been made. 
+--   The final grammar is: 
+--expr ::= term (+ expr | ep)
+--term ::= factor (* term | ep)
+--factor ::= ( expr ) | nat 
+--nat ::= 0 | 1 | 2 ...
+
+--Lets implement the following grammar:
+--expr ::= term + expr | term 
+--term ::= factor * term | factor 
+--factor ::= ( expr ) | nat 
+--nat    ::= 0 | 1 | 2 | ... 
+
+exprSlow :: Parser Int 
+exprSlow = do t <- termSlow --step through a term 
+              symbol "+"
+              e <- exprSlow 
+              return (e+t) 
+           <|> termSlow 
+termSlow :: Parser Int 
+termSlow = do f <- factorSlow
+              symbol "*"
+              t <- termSlow
+              return (f*t) 
+           <|> factorSlow
+factorSlow :: Parser Int 
+factorSlow = do symbol "("
+                e <- exprSlow 
+                symbol ")"
+                return e 
+             <|> natural 
+    
+evalPSlow :: String -> Int 
+evalPSlow xs = case parse exprSlow xs of 
+                 [(n, [])] -> n 
+                 [(_, out)] -> error ("Unused input " ++ out)
+                 []         -> error "Invalid input"
+
+--With this implementation, we have to restart parsing whenever it fails. In the case of a number, it'll fail in exprSlow, which will mean the 
+--work of parsing the input string will be lost and we'll have to recall termSlow... and then in termSlow, it'll fail, so we'll call factorSlow twice, 
+--and then in factorSlow it'll fail, so we'll call natural number, and then finally we'll get our result.
+--With the other implementation we only call termSlow once, so we parse it once. The nested do-block will fail, but then with <|> we return our parsed result to termSlow,
+--which does the same thing... and then in factorSlow the first do block will fail then with <|> we will call natural... and finally get our result.
+--Considering that every expression contains numbers... that means that the first implementation is considerably slower... 
+
+--6. Extend the parser expr :: Parser Int to support subtraction and division, and to use integer values rather than natural numbers, based upon the following revisions 
+--   to the grammar: 
+--7. Further extend the grammar and parser for arithmetic expressions to support exponentation ^, which is assumed to associate to the right and have higher priority than multiplication and division,
+--   but lower priority than parentheses and numbers. For example 2^3*4 means (2^3)*4. 
+--   Hint: the new level of priority requires a new rule in the grammer.
+   
+--expr ::= term (+ expr | - expr | ep)
+--term ::= expt (* term | / term | ep)
+--expt ::= factor (^ expt | ep)
+--factor ::= ( expr ) | int 
+--int ::= ...|-1 | 0 | 1 | ...
+exprExtended :: Parser Int 
+exprExtended = do t <- termExtended --step through a termExtended 
+                  do op <- token (sat (\x -> (x == '+') || (x == '-'))) -- just so that we dont have to pass twice in two do blocks, parsing e twice...
+                     e <- exprExtended                                  -- if it fails then the error will propagate and the rest of the block will 
+                     case op of                                         -- evaluate to [].
+                        '+' -> return (t+e) 
+                        '-' -> return (t-e) 
+                     <|> return t                                       -- p <|> q = P (\inp -> case parse p inp of 
+                                                                        --                        [] -> parse q inp 
+termExtended :: Parser Int                                              --                        [(v,out)] -> [(v,out)])
+termExtended = do expt <- exptExtended 
+                  do op <- token (sat (\x -> (x == '*') || (x == '/')))
+                     t <- termExtended                                
+                     case op of                                        
+                       '*' -> return (expt * t)
+                       '/' -> if t == 0 
+                                 then error "Division by zero " 
+                                 else return (expt `div` t) 
+                     <|> return expt
+exptExtended :: Parser Int 
+exptExtended = do f <- factorExtended 
+                  do symbol "^" 
+                     expt <- exptExtended 
+                     return (f ^ expt)
+                     <|> return f  
+factorExtended :: Parser Int 
+factorExtended = do symbol "("
+                    e <- exprExtended 
+                    symbol ")"
+                    return e 
+                 <|> integer  
+
+evalPExtended :: String -> Int 
+evalPExtended xs = case parse exprExtended xs of 
+                     [(n, [])] -> n 
+                     [(_, out)] -> error ("Unused input " ++ out)
+                     []         -> error "Invalid input"
+
+
+
+--14 Foldables and friends ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+--14.1 Monoids--------------------------------------------------------------------------
+
+--class Monoid a where 
+--  mempty :: a 
+--  mappend :: a -> a -> a 
+--  
+--  mconcat :: [a] -> a 
+--  mconcat = foldr mappend mempty 
+
+--These operations are required to satisfy: 
+--mempty `mappend` x = x 
+--x `mappend` mempty = x
+--x `mappend` (y `mappend` z) = (x `mappend` y) `mappend` z 
+--
+--instance Monoid [a] where 
+--  --memtpy :: [a]
+--  mempty = []
+--
+--  --mappend :: [a] -> [a] -> [a] 
+--  mappend = (++) 
+--
+--instance Monoid a => Monoid (Maybe a) where 
+-- --mempty :: Maybe a 
+-- mempty = Nothing 
+--
+-- --mappend :: Maybe a -> Maybe a -> Maybe a 
+-- Nothing `mappend` my    = my 
+-- mx `mappend` Nothing    = mx 
+-- Just x `mappend` Just y = Just (x `mappend` y)
+
+--newtype Sum a = Sum a 
+--  deriving (Eq, Ord, Show, Read) 
+--
+--getSum :: Sum a -> a 
+--getSum (Sum x) = x 
+
+--instance Num a => Monoid (Sum a) where 
+--  --mempty :: Sum a 
+--  mempty = Sum 0 
+--
+--  --mappend :: Sum a -> Sum a -> Sum a 
+--  Sum x `mappend` Sum y = Sum (x + y)
+--
+--Similar thing exists for Product...
+
+
+--14.2 Foldables ----------------------------------------------------
+
+--fold :: Monoid a => [a] -> a 
+--fold [] = mempty 
+--fold (x:xs) = x `mappend` fold xs 
+--
+--foldTree :: Monoid a => Binarytree a -> a 
+--fold (Binaryleaf x) =  x 
+--fold (Node l r) = fold l `mappend` foldr 
+
+--We can abstract and generalized this behavior to a range of parameterized types: 
+
+--class Foldable t where 
+--  fold    :: Monoid a => t a -> a 
+--  foldMap :: Monoid b => (a -> b) -> t a -> b 
+  --foldr   :: (a -> b -> b) -> b -> t a -> b  (compiler complains since this is important from Prelude)
+  --foldl   :: (a -> b -> a) -> a -> t b -> a  ""
+  
+--instance Foldable [] where 
+--  --fold :: Monoid a => [a] -> a 
+--  fold [] = mempty 
+--  fold (x:xs) = x `mappend` fold xs 
+--  
+--  --foldMap :: Monoid b => (a -> b) -> [a] -> b 
+--  foldMap _ []     = mempty 
+--  foldMap f (x:xs) = f x `mappend` foldMap f xs
+--
+--  --foldr :: (a -> b -> b) -> b -> [a] -> b 
+--  --foldr _ v []     = v 
+--  --foldr f v (x:xs) = f x (foldr f v xs)
+--
+--  --foldl :: (a -> b -> a) -> a -> [b] -> a 
+--  --foldl _ v []     = v
+--  --foldl f v (x:xs) = foldl f (f v x) xs 
+
+instance Foldable Binarytree where 
+  --fold :: Monoid a => Tree a -> a 
+--  fold (Binaryleaf x)   = x 
+--  fold (Binarynode l r) = fold l `mappend` fold r 
+
+  --foldMap :: Monoid b => (a -> b) -> Tree a -> b 
+  foldMap f (Binaryleaf x)   = f x 
+  foldMap f (Binarynode l r) = foldMap f l `mappend` foldMap f r 
+
+  --foldr :: (a -> b -> b) -> b -> Tree a -> b 
+  foldr f v (Binaryleaf x) = f x v 
+  foldr f v (Binarynode l r) = foldr f (foldr f v r) l 
+
+  --foldl :: (a -> b -> a) -> a -> Tree b -> a 
+  foldl f v (Binaryleaf x) = f v x 
+  foldl f v (Binarynode l r) = foldl f (foldl f v l) r 
+
+tree :: Binarytree Int 
+tree = Binarynode (Binarynode (Binaryleaf 1) (Binaryleaf 2)) (Binaryleaf 3) 
+

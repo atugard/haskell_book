@@ -2073,9 +2073,11 @@ threeM = do x <- item
 instance Alternative Parser where 
   --empty :: Parser a 
   empty = P (const [])
+  --(<|>) :: Parser a -> Parser a -> Parser a 
   p <|> q = P ( \inp -> case parse p inp of
                           [] -> parse q inp
                           [(v,out)] -> [(v,out)])
+
 
 --Control.Monad provides a similar class MonadPlus with operators mzero and mplus. 
 
@@ -2123,7 +2125,7 @@ char x = sat (== x)
 string :: String -> Parser String 
 string []     = return [] 
 --            = P (\inp -> ([], inp))
-string (x:xs) = do char x 
+string (x:xs) = do char x  
                    string xs 
                    return (x:xs) 
 --            = char x >>= \_ ->
@@ -2224,4 +2226,187 @@ string (x:xs) = do char x
 --                                                                             [(vn, outn)] -> [("c1c2...cn", outn)]),
 --                   where  inp = "c1c2...cn" ++ outn 
 
+--From the alternative class we have parsers:
+--many x = some x <|> pure [] 
+--       = P ( \inp -> case parse (some x) inp of 
+--                       []        -> [([], inp)]
+--                       [(v,out)] -> [(v,out)])
+--some x    = pure (:) <*> x <*> many x 
+--          = P (\inp -> case parse x inp of 
+--                         []         -> [] 
+--                         [(v, out)] -> let (v', out') = parse (many x) out 
+--                                         in [(v:v', out')])
 
+--lower-case letter followed by zero or more alphanumeric characters 
+ident :: Parser String 
+ident = do x <- lower 
+           xs <- many alphanum 
+           return (x:xs)
+
+--one or more digits
+nat :: Parser Int 
+nat = do xs <- some digit 
+         return (read xs) 
+
+--space, tab, or newline characters 
+space :: Parser () 
+space = do many (sat isSpace)
+           return ()
+
+--parser for integer values:
+int :: Parser Int 
+int = do char '-'  --eats through the - without saving the value 
+         n <- nat  -- saves the value
+         return (-n) --returns a tuple with the negative of the value and the remainder of thes tring 
+      <|> nat 
+
+token :: Parser a -> Parser a 
+token p = do space --steps through leading white space 
+             v <- p --grabs a token of this kind 
+             space --steps through trailing white space 
+             return v --gives token, and rest of expression 
+
+--Now we can define parsers that ignoring spacing around identifiers, natural numbers, integers, and special values
+
+identifier :: Parser String 
+identifier = token ident 
+
+natural :: Parser Int 
+natural = token nat 
+
+integer :: Parser Int 
+integer = token nat 
+
+symbol :: String -> Parser String 
+symbol xs = token (string xs)
+
+nats :: Parser [Int]
+nats = do symbol "[" --step through the opening bracket 
+          n <- natural -- grab a natural number 
+          ns <- many (do symbol ","
+                         natural) -- grab the remaining natural numbers in the list 
+          symbol "]" --step through closing bracket 
+          return (n:ns) -- return the natural numbers in a list, and the remainder of the string 
+
+--This is our grammar (where ep denotes the empty string) :
+--expr ::= term (+ expr | ep)
+--term ::= factor (* term | ep)
+--factor ::= ( expr ) | nat 
+--nat ::= 0 | 1 | 2 ...
+ 
+--Sequencing in the grammar is translated to the do notation,
+--choice | is translated to <|> 
+--the empty string ep becomes the empty parser 
+-- special symbols such as + and * are handled using the symbol function 
+-- and natural numbers are parsed using the natural primitive :
+
+expr :: Parser Int 
+expr = do t <- term --step through a term 
+          do symbol "+" 
+             e <- expr 
+             return (t + e) 
+             <|> return t 
+
+term :: Parser Int 
+term = do f <- factor 
+          do symbol "*"
+             t <- term 
+             return (f*t)
+             <|> return f 
+
+factor :: Parser Int 
+factor = do symbol "("
+            e <- expr 
+            symbol ")"
+            return e 
+         <|> natural 
+
+evalP :: String -> Int 
+evalP xs = case parse expr xs of 
+             [(n, [])] -> n 
+             [(_, out)] -> error ("Unused input " ++ out)
+             []         -> error "Invalid input"
+
+--CALCULATORRRRR --------------------------- 
+box :: [String] 
+box = ["+---------------+",
+       "|               |",
+       "| q | c | d | = |",
+       "+---+---+---+---+",
+       "| 1 | 2 | 3 | + |",
+       "+---+---+---+---+",
+       "| 4 | 5 | 6 | - |",
+       "+---+---+---+---+",
+       "| 7 | 8 | 9 | * |",
+       "+---+---+---+---+",
+       "| 0 | ( | ) | / |",
+       "+---+---+---+---+"]
+
+buttons :: String 
+buttons = standard ++ extra 
+  where 
+    standard = "qcd=123+456-789*0()/"
+    extra    = "QCD \ESC\BS\DEL\n"
+
+cls :: IO () 
+cls = putStr "\ESC[2J"
+
+goto :: Pos -> IO () 
+goto (x, y) = putStr ("\ESC[" ++ show y ++ ";" ++ show x ++ "H")
+
+type Pos = (Int, Int)
+writeat :: Pos -> String -> IO () 
+writeat p xs = do goto p 
+                  putStr xs
+showbox :: IO () 
+showbox = sequence_ [writeat (1,y) b | (y, b) <- zip [1..] box ]
+
+display xs = do writeat (3,2) (replicate 13 ' ')
+                writeat (3,2) (reverse (take 13 (reverse xs)))
+
+beep :: IO () 
+beep = putStr "\BEL" 
+
+calc :: String -> IO () 
+calc xs = do display xs 
+             c <- getCh 
+             if elem c buttons 
+                then process c xs 
+             else 
+                do beep 
+                   calc xs 
+
+process :: Char -> String -> IO () 
+process c xs | elem c "qQ\ESC" = quit 
+             | elem c "=\n"    = evalCalc xs 
+             | elem c "cC"     = clear 
+             | otherwise       = press c xs 
+
+--quitting moves the cursor below the calc box and terminates 
+quit :: IO () 
+quit = goto (1,14) 
+
+--Deleting a char has no effect if the string is empty, else it removes the last character from the string 
+delete :: String -> IO () 
+delete [] = calc [] 
+delete xs = calc (init xs) 
+
+--Evaluation displays the result of parsing and evaluating the string, or sounds a beep if unsuccessful 
+evalCalc :: String -> IO () 
+evalCalc xs = case parse expr xs of 
+                [(n, [])] -> calc (show n) 
+                _         -> do beep 
+                                calc xs 
+
+--Clearing the display resets the current string to empty 
+clear :: IO () 
+clear = calc [] 
+
+--Any other character is appended to the end of the current string 
+press :: Char -> String -> IO () 
+press c xs = calc (xs ++ [c])
+
+runCalculator :: IO () 
+runCalculator = do cls  --clear the screen
+                   showbox  --display the box 
+                   clear  --start with an empty display 
